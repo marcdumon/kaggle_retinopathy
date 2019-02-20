@@ -21,7 +21,6 @@ def test(a, _seed):
     print(a, _seed)
     do_random_stuff(a, 'b')
 
-
 @ex.main
 def xxx():
     print('xxx')
