@@ -13,7 +13,7 @@ ex = Experiment('my test')
 ex.observers.append(MongoObserver.create())
 ex.add_config(my_config())
 print(type(my_config()))
-
+print('xxx')
 
 @ex.capture
 def test(a, _seed):
