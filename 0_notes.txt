@@ -1,0 +1,12 @@
+
+
+Inspiration from Kaggle winners:
+- https://github.com/benanne/kaggle-ndsb/blob/master/data.py
+- https://github.com/sveitser/kaggle_diabetic
+  https://github.com/sveitser/kaggle_diabetic/blob/master/doc/report.pdf
+
+Dataset:
+- How to deal with imbalanced data:
+    - https://www.kaggle.com/rafjaa/resampling-strategies-for-imbalanced-datasets
+    - Use the Kapa metric: https://stats.stackexchange.com/questions/82162/cohens-kappa-in-plain-english
+      Implementation: https://docs.fast.ai/metrics.html#KappaScore
