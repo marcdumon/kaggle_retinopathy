@@ -7,6 +7,7 @@
 """
 Tools to build physical datasets and process labels
 """
+from my_toolbox import MyOsTools as my_ot
 from pathlib import Path
 from typing import List
 import pandas as pd
@@ -14,12 +15,20 @@ import pandas as pd
 from engine import ex
 
 
-def create_directory(path):
-    pass
+def make_sample_labels(path_lbl: Path, balance: bool = True) -> pd.DataFrame:
+    """
+    Loads the original labels in a dataframe, takes a balanced or non-balanced sample of n_samples and
+    returns the sample dataframe.
 
+        Params:
+            path_lbl: the full path (filename icluded) of the original label file.
+                      The expected columns are ['image','level']
 
-def get_source_labels(path_lbl: Path) -> pd.DataFrame:
-    """Loads the source labels in a dataframe and returns a cleaned [fname, ext, label] dataframe"""
+        Returns:
+            Returns labels_dst_df, a datafrane containing a sample of the original labels.
+            The columns are ['fname','ext','label'].
+     """
+
     labels_src_df = pd.read_csv(path_lbl)
     labels_src_df['ext'] = 'jpeg'
     labels_src_df.columns = ['fname', 'label', 'ext']
@@ -37,7 +46,7 @@ def create_dataset(image_size: int,
                    path_src: Path,
                    path_dst: Path,
                    path_lbl: Path) -> pd.DataFrame:
-    labels_src_df = get_source_labels(path_lbl)
+    labels_src_df = make_sample_labels(path_lbl)
     print(labels_src_df)
 
     labels_dst_df = pd.DataFrame(columns=['nr', 'fname', 'ext', 'label'])
