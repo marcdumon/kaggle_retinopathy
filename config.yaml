@@ -1,0 +1,31 @@
+# Configuration File
+
+# Setup
+do_setup: false # If True, edit the setup() code for each new dataset
+do_make_config: false # If True, overwrite the config.yaml file with default one.
+workers: 16     # nr of cores used in multiprocess. Max=16
+seed: 42        # Seed for replication
+experiment_name: test
+experiment_nr: 0
+
+# Image settings
+image_size: 5  # size of the square image
+n_samples: 1  # nr of images per label
+  # balance_type; how to balance the labels.
+  # 0: take n_samples. if not enough, continue. Can lead to imbalanced labels
+  # 1: take n_samples. if not enough, duplicate images till each label has n_samples images
+  # 2: sample all labels for an number of images equal to the amount of images in the lowest label
+# 3: take n_samples. if not enough, augment images till each label has n_samples images
+balance_type: 1
+# png is lossless, therefore beter quality than jpg
+save_ext: png   # The extension dictates the compression algorithm 
+preprocess:     # list of image preprocesses
+  - autocrop
+  - resize
+  - save
+
+# Paths
+path: ../data                   # path to dataset for the project. 
+# Usualy it's to a linked directory to the fast ssd drive
+path_src_ds: 0_original/train   # path to source dataset
+path_dst_ds: experiments/train  # path to destination
