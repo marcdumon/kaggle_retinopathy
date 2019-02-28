@@ -7,16 +7,17 @@
 # Todo:
 #  - Make a package of all my personal "helper" scripts to import in different projects
 import os
+import time
 
 from datetime import datetime
 from pathlib import Path
 from typing import Tuple, List, Dict, Union
 from PIL import Image, ImageFilter
+import numpy as np
 
 
 class MyLogTools:
     # Todo: implement other log levels and media
-    # Todo: make configuration variables global in other config file or script
     """
     Collection of function to display or write logs to file of database
     Level:
@@ -73,7 +74,7 @@ class MyOsTools:
 
     @classmethod
     def rename_directory(cls):
-        os.rename()
+        pass
 
     @classmethod
     def delete_files(cls):
@@ -250,6 +251,15 @@ class MyImageTools:
         - resize(cls, image: Image, size: int = 32, resample=Image.LANCZOS)->Image:
 
     """
+    """ 
+    Todo
+    All pre-trained models expect input images normalized in the same way, i.e. mini-batches of 3-channel RGB images 
+    of shape (3 x H x W), where H and W are expected to be at least 224. 
+    The images have to be loaded in to a range of [0, 1] and then 
+    normalized using mean = [0.485, 0.456, 0.406] and std = [0.229, 0.224, 0.225]. 
+    You can use the following transform to normalize:
+    normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    """
 
     @classmethod
     def get_image(cls, fname: str, path: Path) -> Image:
@@ -264,6 +274,10 @@ class MyImageTools:
         img = Image.open(path / fname)
         # MyLogTools.log('DEBUG: Image loaded: {}'.format(fname), level=5)
         return img
+
+    @classmethod
+    def image_to_array(cls, image: Image) -> np.array:
+        return np.asarray(image)
 
     @classmethod
     def auto_crop(cls, image: Image, square_min_box: bool = False) -> Image:
@@ -306,7 +320,75 @@ class MyImageTools:
         image = image.resize((size, size), resample=resample)
         return image
 
+    @classmethod
+    def minmax_scale(cls, im_array: np.array, per_channel: bool = False) -> np.array:
+        """
+        Scales a numpy image array per channel to [0, 1] and returns that array.
+            Args:
+                - im_array: numpy array to be min-max scaled per channel
+                - per_channel: if True, then the min and max will be calculated per channel. Otherwise min and max will be calculated for the entire image
+            Return:
+                Returns the min-max-scaled numpy array of the image
+        """
+        # Todo: Per channel better ???
+        im_array.setflags(write=1)  # Todo: array seems read-only. Why?
+        n_chanels = im_array.shape[-1]
 
+        if per_channel:
+            new_array = np.zeros(im_array.shape)
+            for i in range(n_chanels):  # RGB
+                m, M = im_array[..., i].min(), im_array[..., i].max()
+                print(i, m, M)
+                new_array[..., i] = (im_array[..., i] - m) / (M - m)
+        else:
+            new_array = (im_array - im_array.min()) / (im_array.max() - im_array.min())
+        return new_array
+
+    @classmethod
+    def standardize(cls, im_array: np.array, mean: List, std: List) -> Image:
+        # Todo: Test if this works correctly
+        """
+        See: https://github.com/tensorpack/tensorpack/issues/789
+        Makes the features have 0-mean and unit (1) variance (or std). If the im_array is in BGR (OpenCV) iso RGB then the
+        mean en std lists should also have that same order! If they are RGB means or std, swap color channels with
+        mean[::-1] and std[::-1]
+        Models are specific on the mean and std of the imput they are trained on! If you use a 3th party pretrained model,
+        standardize the new im_array with the same mean and std as the pictures used to train the model on.
+        Ex: Image Net used to train Resnet has mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
+
+            Args:
+                - im_array: the im_array to standardize. The im_array should be scaled to [0, 1]
+                - mean: The mean  is a ist with value's for each color channel.
+                - str: The standard deviation is a List with vaue's for each color schannel.
+            Return:
+                 Returns the standardized im_array
+        """
+        n_chanels = im_array.shape[-1]
+        new_array = np.zeros(im_array.shape)
+        for i in range(n_chanels):  # RGB
+            new_array[..., i] = (im_array[..., i] - mean[i]) / std[i]
+        return new_array
+
+    @classmethod
+    def ___calc_channel_mean_std(cls):
+        # see: https://stackoverflow.com/questions/47850280/fastest-way-to-compute-image-dataset-channel-wise-mean-and-standard-deviation-in
+        # https://stats.stackexchange.com/questions/374410/how-to-calculate-the-image-datasets-mean-and-std-for-deep-learning
+        #
+
+        """
+        Calculates the per channel mean and std for a dataset.
+
+
+        :return:
+        """
+        pass
+
+    @classmethod
+    def ___calc_mean_std_dataset(cls):
+        # Multiprocess iterate over images
+        # def get_mean_and_std(dataset): https://github.com/QuantScientist/Deep-Learning-Boot-Camp/blob/master/Kaggle-PyTorch/PyTorch-Ensembler/utils.py
+        #
+        pass
 if __name__ == '__main__':
     x = 'yyy'
     # # x = MyOsTools.get_dir_filesnames(Path('../data/0_original/train'), 'jpeg')

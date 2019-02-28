@@ -98,6 +98,7 @@ class ImagePreprocess:
     @classmethod
     def normalize_image(cls, image: Image) -> Image:
         """
+        # ToDo: Check what this does exactly
         See: https://www.kaggle.com/gauss256/preprocess-images
         Normalize PIL image
         Normalizes luminance to (mean,std)=(0,1), and applies a [1%, 99%] contrast stretch

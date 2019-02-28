@@ -6,9 +6,24 @@
 
 """
 Engine for running experiments
-Todo: use config.yalm iso config() from sacred
+
+x Todo: delete my_config
+x Todo: implement image standardisation
+x Todo: make test script that loads a single image to test different tools
+
+
 Todo: move all pathlib paths to my_toolbox, use str as parameter.
-Todo: clean labels.csv
+Todo: change PIL for Opencv ?
+Todo: implement calculate batch and dataset mean and std
+                    (see:https://discuss.pytorch.org/t/computing-the-mean-and-std-of-dataset/34949/3)
+                    def get_mean_and_std(dataset): https://github.com/QuantScientist/Deep-Learning-Boot-Camp/blob/master/Kaggle-PyTorch/PyTorch-Ensembler/utils.py
+Todo: implement ZCA whitening see
+    - https://stackoverflow.com/questions/41635737/is-this-the-correct-way-of-whitening-an-image-in-python/41894317
+Todo: add other preprocessing functions
+
+
+Todo: load config.yalm into the sacred Experiment
+Todo: check if numpy uses Atlas/Blas (performance)
 """
 import multiprocessing
 from pathlib import Path
@@ -80,111 +95,29 @@ def setup():
 
 # ----------------------------------------------------------------------------------------------------------------------
 yaml = YAML(typ='safe')
-with open('config.yaml') as f:
-    config = yaml.load(f)
-
-ex = Experiment(config['experiment_name'] + '_' + str(config['experiment_nr']))
+with open('config.yaml') as fl:
+    config = yaml.load(fl)
 
 
+# ex = Experiment(config['experiment_name'] + '_' + str(config['experiment_nr']))
 # ex.observers.append(MongoObserver.create())
 
-def make_config_yaml():
-    # Todo: To have random, do: if seed==0, seed=randint() ?
-    """
-
-        Return:
-    """
-    # !!!! The intendations in doc must be alligned to the far left otherwise the yaml file looks ugly
-    doc = """
-# Configuration File
-
-# Setup
-do_setup: False # If True, edit the setup() code for each new dataset
-do_make_config: True # If True, overwrite the config.yaml file with default one.
-workers: 16     # nr of cores used in multiprocess. Max=16
-seed: 42        # Seed for replication
-experiment_name: test
-experiment_nr: 0
-
-# Image settings
-image_size: 5  # size of the square image
-n_samples: 1  # nr of images per label
-# balance_type; how to balance the labels.
-    # 0: take n_samples. if not enough, continue. Can lead to imbalanced labels
-    # 1: take n_samples. if not enough, duplicate images till each label has n_samples images
-    # 2: sample all labels for an number of images equal to the amount of images in the lowest label
-    # 3: take n_samples. if not enough, augment images till each label has n_samples images
-balance_type: 1
-# png is lossless, therefore beter quality than jpg
-save_ext: 'png' # The extension dictates the compression algorithm 
-preprocess:     # list of image preprocesses
-    - autocrop
-    - resize
-    - save
-
-# Paths
-path: ../data                   # path to dataset for the project. 
-                                # Usualy it's to a linked directory to the fast ssd drive
-path_src_ds: 0_original/train   # path to source dataset
-path_dst_ds: experiments/train  # path to destination
-    """
-    yaml = YAML(typ='rt')
-    yaml.indent(mapping=2, sequence=4, offset=4)
-    yaml_doc = yaml.load(doc)
-    with open('config.yaml', 'w') as f:
-        yaml.dump(yaml_doc, f)
-
-
-@ex.config
-# ----------------------------------------------------------------------------------------------------------------------
-def my_config():
-    """
-        Parameters for experiments
-        Todo: cleanup
-        Todo: Decide to replace configuration parameters with json or yalm file or not.
-    """
-
-    '''   
-    random_state = RandomState(seed)
-    path_dst_ds: 'experiments/train_{}_{}'.format(image_size, _name)  # path to destination
-    '''
-
-    # Switches
-    do_setup = False
-    workers = 16
-    seed = 42
-    random_state = RandomState(seed)
-
-    # Create dataset
-    preprocess = ['auto_crop', 'resize', 'save']  # list of image preprocesses
-    image_size = 50  # size of the square image
-    n_samples = 100  # nr of images per label
-    # balance_type; how to balance the labels.
-    # 0: take n_samples. if not enough, continue. Can lead to imbalanced labels
-    # 1: take n_samples. if not enough, duplicate images till each label has n_samples images
-    # 2: sample all labels for an number of images equal to the amount of images in the lowest label
-    # 3: take n_samples. if not enough, augment images till each label has n_samples images
-    balance_type = 1
-    # png is lossless, therefore beter quality than jpg
-    save_ext = 'png'
-    # Paths
-    path = Path('../data')  # path to data
-    path_src_ds = path / '0_original/train'  # path to source dataset
-    path_dst_ds = path / 'experiments/train_{}_{}'.format(image_size, config['experiment_name'])  # path to destination
-
 
 # ----------------------------------------------------------------------------------------------------------------------
+
 class Engine:
     """
 
     """
     # Image_size ????
+
+    # Todo: Is it not better to set all the class variables in a method?
     _path = Path(config['path'])
     _path_src_ds = _path / config['path_src_ds']
-    dataset_name = '_{}px_{}i_{}bt_{}'.format(config['image_size'], config['n_samples'], config['balance_type'],
-                                              config['preprocess'])
-    dataset_name = dataset_name.replace('[', '').replace(']', '').replace('\'', '').replace(',', 'X').replace(' ', '')
-    _path_dst_ds = _path / (config['path_dst_ds'] + dataset_name)
+    _dataset_name = '_{}px_{}i_{}bt_{}'.format(config['image_size'], config['n_samples'], config['balance_type'],
+                                               config['preprocess'])
+    _dataset_name = _dataset_name.replace('[', '').replace(']', '').replace('\'', '').replace(',', 'X').replace(' ', '')
+    _path_dst_ds = _path / (config['path_dst_ds'] + _dataset_name)
     _preprocess = config['preprocess']
     _n_samples = config['n_samples']
     _balance_type = config['balance_type']
@@ -199,7 +132,7 @@ class Engine:
     _labels_uniq_lst.sort()
 
     @classmethod
-    @ex.capture
+    # @ex.capture
     def create_dataset(cls):
         """
         Collection of operations to create a new dataset
@@ -227,15 +160,20 @@ class Engine:
         df['fname_save'] = df['fname'] + '.' + cls._save_ext
         df['fname_load'] = df['fname'].str.cat(df['ext'], sep='.')
         print(df.columns)
+
         args = [(f['fname_load'], f['fname_save'], f['label'], i + 1, df.shape[0]) for i, f in df.iterrows()]
         pool = multiprocessing.Pool(cls._workers)
         pool.starmap(cls._prepro_image, args)
+
         # Clean df for labels.csv
         df['ext'] = cls._save_ext
         df.to_csv(path_or_buf=cls._path_dst_ds / 'labels.csv')
+        # Write the config to the dataset directory
+        with open(cls._path_dst_ds / 'used_config.yaml', 'w') as f:
+            yaml.dump(config, f)
 
     @classmethod
-    @ex.capture
+    # @ex.capture
     def _take_samples(cls):
         """
         Takes a sample of the _labels_df. Depending on the value of _balance_type,. the sample will be taken as:
@@ -243,6 +181,7 @@ class Engine:
                 - 1: take n_samples. if not enough, duplicate images till each label has n_samples images
                 - 2: sample all labels for an number of images equal to the amount of images in the smallest label
                 - 3: take n_samples. if not enough, augment images till each label has n_samples images
+                - 4: take n_samples. if not enough, calculate pseudolabels on the testset and add the images to the right label directory
             Return:
                 Returns a dataframe with samples from _labels_df
         """
@@ -262,12 +201,15 @@ class Engine:
             if cls._balance_type == 3:
                 # Todo: implement augmentation
                 pass
+            if cls._balance_type == 3:
+                # Todo: implement pseudo labels
+                pass
             df = concat([df, df_s])
         df = df.reset_index(drop=True)  # Old index now a column
         return df
 
     @classmethod
-    @ex.capture
+    # @ex.capture
     def _setup_dir_structure(cls):
         # Todo: doesn't exit when .../train_xxx_yyy/label1 is not empty
         """
@@ -304,10 +246,10 @@ class Engine:
                 if not res['success']: raise SystemExit(0)
 
     @classmethod
-    @ex.capture
+    # @ex.capture
     def _prepro_image(cls, fname_load: str, fname_save: str, label: Union[int, str], i: int = 0, tot: int = 0) -> None:
         """
-        Collection of operations to preprocess an immage. It loads an image and executes preprocessing operations
+        Collection of operations to preprocess an image. It loads an image and executes preprocessing operations
         according to the values of prepro.
         It returns ???
             Args:
@@ -319,35 +261,91 @@ class Engine:
             Returns:
                 ???
         """
-        """
-        Todo: All pre-trained models expect input images normalized in the same way, i.e. mini-batches of 3-channel RGB images 
-        of shape (3 x H x W), where H and W are expected to be at least 224. 
-        The images have to be loaded in to a range of [0, 1] and then 
-        normalized using mean = [0.485, 0.456, 0.406] and std = [0.229, 0.224, 0.225]. 
-        You can use the following transform to normalize:
-        normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-        """
         # Load image
         img = my_it.get_image(fname=fname_load, path=cls._path_src_ds / str(label))
         # Start preprocessing
         for p in cls._preprocess:
-            if p == 'auto_crop':
+            if p == 'autocrop':
                 img = my_it.auto_crop(image=img)
             if p == 'resize':
                 img = my_it.resize(image=img, size=cls._image_size)
+            if p == 'scale01':
+                img = my_it.scale_01(img)
+            if p == 'stdardize':
+                my_it.standardize(img, mean=[0.485, 0.456, 0.406],
+                                  std=[0.229, 0.224, 0.225])  # This sould be in config.yaml
+
         # save image
         img.save(cls._path_dst_ds / str(label) / fname_save)
         my_lt.log('INFO: Image {}/{} \t\t saved: {}'.format(i, tot, fname_save))
         return img
 
 
-@ex.main
-def experiment(do_setup):
+def make_config_yaml():
+    # Todo: To have random, do: if seed==0, seed=randint() ?
+    """
+        Process that thakes all the default parameters from a string and saves it als a config.yalm file.
+
+        Return: None
+    """
+
+    # !!!! The intendations in doc must be alligned to the far left otherwise the yaml file looks ugly
+    doc = """
+# Configuration File
+
+# Setup
+do_setup: False # If True, edit the setup() code for each new dataset
+do_make_config: True # If True, overwrite the config.yaml file with default one.
+workers: 16     # nr of cores used in multiprocess. Max=16
+seed: 42        # Seed for replication
+experiment_name: test
+experiment_nr: 0
+
+# Image settings
+image_size: 512  # size of the square image
+n_samples: 3  # nr of images per label
+# balance_type; how to balance the labels.
+    # 0: take n_samples. if not enough, continue. Can lead to imbalanced labels
+    # 1: take n_samples. if not enough, duplicate images till each label has n_samples images
+    # 2: sample all labels for an number of images equal to the amount of images in the lowest label
+    # 3: take n_samples. if not enough, augment images till each label has n_samples images
+balance_type: 1
+# png is lossless
+save_ext: 'png' # The extension dictates the compression algorithm 
+# list of image preprocesses
+    # autocrop
+    # resize
+    # scale01
+    # stdardize
+preprocess:     
+    - autocrop
+    - resize
+    - scale01
+
+# Paths
+path: ../data                   # path to dataset for the project. 
+                                # Usualy it's to a linked directory to the fast ssd drive
+path_src_ds: 0_original/train   # path to source dataset
+path_dst_ds: experiments/train  # path to destination
+    """
+    yaml = YAML(typ='rt')
+    yaml.indent(mapping=2, sequence=4, offset=4)
+    yaml_doc = yaml.load(doc)
+    with open('config.yaml', 'w') as f:
+        yaml.dump(yaml_doc, f)
+
+
+# @ex.main
+def experiment():
     if config['do_setup']: setup()
     if config['do_make_config']: make_config_yaml()
     Engine.create_dataset()
 
 
-@ex.automain
-def run_engine():
+# @ex.automain
+# def run_engine():
+#     experiment()
+
+
+if __name__ == '__main__':
     experiment()

@@ -10,3 +10,9 @@ Dataset:
     - https://www.kaggle.com/rafjaa/resampling-strategies-for-imbalanced-datasets
     - Use the Kapa metric: https://stats.stackexchange.com/questions/82162/cohens-kappa-in-plain-english
       Implementation: https://docs.fast.ai/metrics.html#KappaScore
+- Preproccess:
+    - ZCA whitening: https://stackoverflow.com/questions/41635737/is-this-the-correct-way-of-whitening-an-image-in-python/41894317
+                     https://medium.freecodecamp.org/https-medium-com-hadrienj-preprocessing-for-deep-learning-9e2b9c75165c
+
+    - mean and std of dataset: https://discuss.pytorch.org/t/confused-about-the-image-preprocessing-in-classification/3965
+
