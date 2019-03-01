@@ -1,9 +1,9 @@
 
 
 Inspiration from Kaggle winners:
-- https://github.com/benanne/kaggle-ndsb/blob/master/data.py
-- https://github.com/sveitser/kaggle_diabetic
-  https://github.com/sveitser/kaggle_diabetic/blob/master/doc/report.pdf
+    - https://github.com/benanne/kaggle-ndsb/blob/master/data.py
+    - https://github.com/sveitser/kaggle_diabetic
+    - https://github.com/sveitser/kaggle_diabetic/blob/master/doc/report.pdf
 
 Dataset:
 - How to deal with imbalanced data:
@@ -15,4 +15,6 @@ Dataset:
                      https://medium.freecodecamp.org/https-medium-com-hadrienj-preprocessing-for-deep-learning-9e2b9c75165c
 
     - mean and std of dataset: https://discuss.pytorch.org/t/confused-about-the-image-preprocessing-in-classification/3965
+- Inspiration domain experts:
+    - https://hackaday.io/project/11943/logs?sort=newest&page=2
 

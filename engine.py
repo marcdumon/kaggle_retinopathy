@@ -7,26 +7,33 @@
 """
 Engine for running experiments
 
-x Todo: delete my_config
-x Todo: implement image standardisation
-x Todo: make test script that loads a single image to test different tools
+x Todo: move all pathlib paths to my_toolbox, use str as parameter.
+x Todo: change PIL for Opencv ?
+x Todo: move save images out of engine (don't use opencv/pil in Engine)
+x Todo: Test if def setup(): still works after changing Path to str
 
 
-Todo: move all pathlib paths to my_toolbox, use str as parameter.
-Todo: change PIL for Opencv ?
+Todo: implement first classifier
+
+Todo: implement preprocess test dataset
+
+Todo: Check if autocrop/resize preserves aspect ratio (ex: image 17426_right.png (label 4)
+
+Todo: implement data augmentation
+Todo: add other preprocessing functions (rotate, flip, ...)
+
 Todo: implement calculate batch and dataset mean and std
                     (see:https://discuss.pytorch.org/t/computing-the-mean-and-std-of-dataset/34949/3)
                     def get_mean_and_std(dataset): https://github.com/QuantScientist/Deep-Learning-Boot-Camp/blob/master/Kaggle-PyTorch/PyTorch-Ensembler/utils.py
 Todo: implement ZCA whitening see
     - https://stackoverflow.com/questions/41635737/is-this-the-correct-way-of-whitening-an-image-in-python/41894317
-Todo: add other preprocessing functions
-
-
 Todo: load config.yalm into the sacred Experiment
+Todo: implement pseud-labeling
+
 Todo: check if numpy uses Atlas/Blas (performance)
 """
 import multiprocessing
-from pathlib import Path
+# from pathlib import Path
 from pprint import pprint
 from typing import Union, List
 from numpy.random import RandomState
@@ -63,8 +70,8 @@ def setup():
             - minimum columns: fname, ext, label
             - optional feature columns: f_xxx
     """
-    path_dset = Path('/mnt/Datasets/kaggle_diabetic_retinopathy/0_original/')
-    fpath_lbl = path_dset / 'trainLabels.csv'
+    path_dset = '/mnt/Datasets/kaggle_diabetic_retinopathy/0_original/'
+    fpath_lbl = path_dset + 'trainLabels.csv'
 
     # Standardize labels to: [fname, ext, label [, feature, ...]]
     labels_df = read_csv(fpath_lbl)
@@ -80,15 +87,15 @@ def setup():
     labels_df.to_csv(path_dset / 'train/labels.csv')
     # Reorder training dataset from /train/... to /train/label1/...
     # Create /train/label directories
-    my_ot.create_directory(path_dset, 'train')  # parent
+    my_ot.create_directory(path_dset + 'train')  # parent
     labels_lst = labels_df['label'].unique()
     labels_lst.sort()
     for l in labels_lst:
-        my_ot.create_directory(path_dset / 'train', str(l))  # children
+        my_ot.create_directory(path_dset + 'train/' + str(l))  # children
     # Move the files to the correct new label-directories
     for l in labels_lst:
-        path_src = path_dset / 'train'
-        path_dst = path_dset / 'train' / str(l)
+        path_src = path_dset + 'train/'
+        path_dst = path_dset + 'train/' + str(l)
         fnames = ['{}.{}'.format(l[0], l[1]) for l in labels_df.loc[labels_df['label'] == l, ['fname', 'ext']].values]
         my_ot.move_files(fnames=fnames, path_src=path_src, path_dst=path_dst)
 
@@ -97,6 +104,7 @@ def setup():
 yaml = YAML(typ='safe')
 with open('config.yaml') as fl:
     config = yaml.load(fl)
+print(config)
 
 
 # ex = Experiment(config['experiment_name'] + '_' + str(config['experiment_nr']))
@@ -112,12 +120,12 @@ class Engine:
     # Image_size ????
 
     # Todo: Is it not better to set all the class variables in a method?
-    _path = Path(config['path'])
-    _path_src_ds = _path / config['path_src_ds']
-    _dataset_name = '_{}px_{}i_{}bt_{}'.format(config['image_size'], config['n_samples'], config['balance_type'],
+    _path = config['path']
+    _path_src_ds = _path + config['path_src_ds']
+    _dataset_name = '{}px_{}i_{}bt_{}/'.format(config['image_size'], config['n_samples'], config['balance_type'],
                                                config['preprocess'])
     _dataset_name = _dataset_name.replace('[', '').replace(']', '').replace('\'', '').replace(',', 'X').replace(' ', '')
-    _path_dst_ds = _path / (config['path_dst_ds'] + _dataset_name)
+    _path_dst_ds = _path + config['path_dst_ds'] + _dataset_name
     _preprocess = config['preprocess']
     _n_samples = config['n_samples']
     _balance_type = config['balance_type']
@@ -125,7 +133,8 @@ class Engine:
     _workers = config['workers']
     _image_size = config['image_size']
     _save_ext = config['save_ext']
-    _labels_df = read_csv(_path_src_ds / 'labels.csv',
+    print(_path_src_ds, _path_dst_ds, _path)
+    _labels_df = read_csv(_path_src_ds + 'labels.csv',
                           index_col=[0])  # Dataframe with coulmns [fname, ext, label, f_...]
     _label_count = _labels_df.groupby(['label']).agg('count')['fname']  # Series with [label, count]
     _labels_uniq_lst = _labels_df['label'].unique().tolist()  # list of unique labels
@@ -140,7 +149,7 @@ class Engine:
         """
         # Sanity checks
         # Check if source directory path_src_ds exists
-        res = my_ot.check_dir_exists(path=cls._path_src_ds.parent, name=cls._path_src_ds.parts[-1])
+        res = my_ot.check_dir_exists(path=cls._path_src_ds)
         if not res['success']: raise SystemExit(0)
         # Check if labels.csv exists in .../train directory
         res = my_ot.check_files_exist(fnames=['labels.csv'], path=cls._path_src_ds)
@@ -149,7 +158,7 @@ class Engine:
         for l in cls._labels_uniq_lst:
             fnames = cls._labels_df.loc[cls._labels_df['label'] == l, ['fname', 'ext']]
             fnames = fnames['fname'].str.cat(fnames['ext'], sep='.')
-            res = my_ot.check_files_exist(fnames=fnames, path=cls._path_src_ds / str(l))
+            res = my_ot.check_files_exist(fnames=fnames, path=cls._path_src_ds + str(l))
             if not res['success']: raise SystemExit(0)
         # Setup directory structure for _path_dst_ds
         cls._setup_dir_structure()
@@ -167,9 +176,9 @@ class Engine:
 
         # Clean df for labels.csv
         df['ext'] = cls._save_ext
-        df.to_csv(path_or_buf=cls._path_dst_ds / 'labels.csv')
+        df.to_csv(path_or_buf=cls._path_dst_ds + 'labels.csv')
         # Write the config to the dataset directory
-        with open(cls._path_dst_ds / 'used_config.yaml', 'w') as f:
+        with open(cls._path_dst_ds + 'used_config.yaml', 'w') as f:
             yaml.dump(config, f)
 
     @classmethod
@@ -224,25 +233,25 @@ class Engine:
             Return:
         """
         # Check if path_dst_ds exists, throw error when it's not empy, create if it doesn't exist
-        res = my_ot.check_dir_exists(path=cls._path_dst_ds.parent, name=cls._path_dst_ds.parts[-1])
+        res = my_ot.check_dir_exists(path=cls._path_dst_ds)
         if res['success']:  # _path_dst_ds exists
             res = my_ot.get_filenames(path=cls._path_dst_ds)  # check if _path_dst_ds is empty
             if res:  # _path_dst_ds is not empty
                 my_lt.log('ERROR: Directory not empty: {}'.format(cls._path_dst_ds))
                 raise SystemExit(0)
         else:  # create _path_dst_ds directory
-            res = my_ot.create_directory(path=cls._path_dst_ds.parent, name=cls._path_dst_ds.parts[-1])
+            res = my_ot.create_directory(path=cls._path_dst_ds)
             if not res['success']: raise SystemExit(0)
         # Make label directories
         for l in cls._labels_uniq_lst:
-            res = my_ot.check_dir_exists(path=cls._path_dst_ds, name=str(l))
+            res = my_ot.check_dir_exists(path=cls._path_dst_ds + str(l))
             if res['success']:  # _path_dst_ds/label/ exists
-                res = my_ot.get_filenames(path=cls._path_dst_ds / str(l))  # check if _path_dst_ds/label/ is empty
+                res = my_ot.get_filenames(path=cls._path_dst_ds + str(l))  # check if _path_dst_ds/label/ is empty
                 if res:  # _path_dst_ds/label/ is not empty
-                    my_lt.log('ERROR: Directory not empty: {}'.format(cls._path_dst_ds / str(l)))
+                    my_lt.log('ERROR: Directory not empty: {}'.format(cls._path_dst_ds + str(l)))
                     raise SystemExit(0)
             else:  # create _path_dst_ds directory
-                res = my_ot.create_directory(path=cls._path_dst_ds, name=str(l))
+                res = my_ot.create_directory(path=cls._path_dst_ds + str(l))
                 if not res['success']: raise SystemExit(0)
 
     @classmethod
@@ -262,23 +271,24 @@ class Engine:
                 ???
         """
         # Load image
-        img = my_it.get_image(fname=fname_load, path=cls._path_src_ds / str(label))
+        im_array = my_it.get_image(fname=fname_load, path=cls._path_src_ds + str(label) + '/')
+
         # Start preprocessing
         for p in cls._preprocess:
             if p == 'autocrop':
-                img = my_it.auto_crop(image=img)
+                im_array = my_it.auto_crop(im_array=im_array)
             if p == 'resize':
-                img = my_it.resize(image=img, size=cls._image_size)
+                im_array = my_it.resize(im_array=im_array, size=cls._image_size)
             if p == 'scale01':
-                img = my_it.scale_01(img)
+                im_array = my_it.minmax_scale(im_array)
             if p == 'stdardize':
-                my_it.standardize(img, mean=[0.485, 0.456, 0.406],
+                my_it.standardize(im_array, mean=[0.485, 0.456, 0.406],
                                   std=[0.229, 0.224, 0.225])  # This sould be in config.yaml
 
         # save image
-        img.save(cls._path_dst_ds / str(label) / fname_save)
+        my_it.save_image(im_array=im_array, path=cls._path_dst_ds + str(label) + '/', fname=fname_save)
         my_lt.log('INFO: Image {}/{} \t\t saved: {}'.format(i, tot, fname_save))
-        return img
+        return im_array
 
 
 def make_config_yaml():
@@ -290,14 +300,14 @@ def make_config_yaml():
     """
 
     # !!!! The intendations in doc must be alligned to the far left otherwise the yaml file looks ugly
-    doc = """
+    doc = """   
 # Configuration File
 
 # Setup
-do_setup: False # If True, edit the setup() code for each new dataset
-do_make_config: True # If True, overwrite the config.yaml file with default one.
-workers: 16     # nr of cores used in multiprocess. Max=16
-seed: 42        # Seed for replication
+do_setup: False         # If True, edit the setup() code for each new dataset
+do_make_config: False   # If True, overwrite the config.yaml file with default one.
+workers: 1              # nr of cores used in multiprocess. Max=16
+seed: 42                # Seed for replication
 experiment_name: test
 experiment_nr: 0
 
@@ -323,10 +333,10 @@ preprocess:
     - scale01
 
 # Paths
-path: ../data                   # path to dataset for the project. 
-                                # Usualy it's to a linked directory to the fast ssd drive
-path_src_ds: 0_original/train   # path to source dataset
-path_dst_ds: experiments/train  # path to destination
+path: ../data/                   # path to dataset for the project. 
+                                 # Usualy it's to a linked directory to the fast ssd drive
+path_src_ds: 0_original/train/   # path to source dataset
+path_dst_ds: experiments/train_  # path to destination
     """
     yaml = YAML(typ='rt')
     yaml.indent(mapping=2, sequence=4, offset=4)

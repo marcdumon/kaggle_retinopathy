@@ -12,8 +12,9 @@ import time
 from datetime import datetime
 from pathlib import Path
 from typing import Tuple, List, Dict, Union
-from PIL import Image, ImageFilter
+# from PIL import Image, ImageFilter
 import numpy as np
+import cv2 as cv
 
 
 class MyLogTools:
@@ -132,18 +133,17 @@ class MyOsTools:
         return {'success': succ, 'message': msg, 'fmissing': fmissing, 'fexcess': fexcess}
 
     @classmethod
-    def check_dir_exists(cls, path: Path, name: str) -> Dict:
+    def check_dir_exists(cls, path: str) -> Dict:
         """
         Checks if the directory exists
 
         Args:
             path: Path to the directory to check
-            name: Name of the directory to check
 
         Returns:
             Returns a dict {success, message}
         """
-        path_dir = os.fspath(path / name)  # Path -> PathLike
+        path_dir = os.fspath(path)  # Path -> PathLike
         succ = os.path.isdir(path_dir)
         if succ:
             msg = 'OK: Directory Exists: {}'.format(path_dir)
@@ -154,7 +154,7 @@ class MyOsTools:
         return {'success': succ, 'message': msg}
 
     @classmethod
-    def move_files(cls, fnames: List, path_src: Path, path_dst: Path) -> Dict:
+    def move_files(cls, fnames: List, path_src: str, path_dst: str) -> Dict:
         """
         Moves all the files in the fnames list from path_src to path_dst. If the file already exists,
         it will be silently overwritten. If the file doesn't exist in the path_src, an error will be trown and
@@ -174,7 +174,7 @@ class MyOsTools:
         tot = len(fnames)
         for i, f in enumerate(fnames):
             try:
-                os.rename(path_src / f, path_dst / f)
+                os.rename(path_src + f, path_dst + f)
                 succ = succ and True
                 msg = 'OK: File {}/{} moved to : {}/{}'.format(i, tot, path_dst, f)
                 MyLogTools.log(msg)
@@ -208,21 +208,20 @@ class MyOsTools:
         return fnames
 
     @classmethod
-    def create_directory(cls, path: Path, name: str) -> Dict:
+    def create_directory(cls, path: str) -> Dict:
         """
         Creates a new directory located in path. If the directory already exists, returns success flag = False
         If the directory already exists, a warning will be thrown and the list with existing directory will be returned
 
         Args:
             path: Path to location where the new directory should be created
-            name: Name of the new directory to be created at path location
 
         Returns:
             Returns a dict {success, message}
 
         """
         msgs = []
-        path_dir = os.fspath(path / name)  # Path -> PathLike
+        path_dir = os.fspath(path)  # Path -> PathLike
         try:
             os.mkdir(path=path_dir)
             succ = True
@@ -262,7 +261,7 @@ class MyImageTools:
     """
 
     @classmethod
-    def get_image(cls, fname: str, path: Path) -> Image:
+    def get_image(cls, fname: str, path: str) -> np.array:
         """
         Gets image with name 'im_name' located in 'path' directory
             Args:
@@ -271,54 +270,60 @@ class MyImageTools:
             Returns:
                 Returns an Image
         """
-        img = Image.open(path / fname)
+        im_array = cv.imread(path + fname, 1)
+        if im_array is None:
+            MyLogTools.log('ERROR: No image array loaded: {}{}'.format(path, fname))
+            raise FileNotFoundError
         # MyLogTools.log('DEBUG: Image loaded: {}'.format(fname), level=5)
-        return img
+        return im_array
 
     @classmethod
-    def image_to_array(cls, image: Image) -> np.array:
-        return np.asarray(image)
+    def save_image(cls, im_array: np.array, path: str, fname: str) -> None:
+        cv.imwrite(path + fname, im_array)
 
     @classmethod
-    def auto_crop(cls, image: Image, square_min_box: bool = False) -> Image:
+    def auto_crop(cls, im_array: np.array, square_min_box: bool = False) -> np.array:
         """
         Automatically crops an image and make it quare.
         Doing auto_crop before resizing avoids change in aspect ratio for rectangle images
             Args:
-                image: The image to be cropped
+                im_array: The image to be cropped
                 square_min_box: If True, the image will be croped with the min(width, hight) of the getbbox crop-box.
                                 A part of the image be lost.
                                 If False it wil take the max(with, height)
             Returns:
                 Returnes the croped square image
         """
-        blured = image.filter(ImageFilter.BoxBlur(20))
-        bw = blured.convert('1')  # Convert to B&W for better box
-        box = bw.getbbox()  # box is not a square
-        # make min or max square box
-        if square_min_box:  # This destroys information
-            l = min(box[2] - box[0], box[3] - box[1])
-        else:  # max
-            l = max(box[2] - box[0], box[3] - box[1])
-        center = ((box[2] + box[0]) / 2, (box[3] + box[1]) / 2)
-        box = (center[0] - l / 2, center[1] - l / 2, center[0] + l / 2, center[1] + l / 2)
-        croped = image.crop(box)
-        # MyLogTools.log('OK: Image')
-        return croped
+        # blured = im_array.filter(ImageFilter.BoxBlur(20))
+        blured = cv.blur(im_array, (5, 5))
+        # Convert to grayscale
+        blured = cv.cvtColor(blured, cv.COLOR_BGR2GRAY)
+        # Convert to B&W
+        _, bw = cv.threshold(blured, 50, 255, cv.THRESH_BINARY)  # Eye circle is white, rest black
+        # Get the bounding rectangle
+        x, y, w, h = cv.boundingRect(bw)
+        # Crop im_array to square matrix
+        if square_min_box:
+            d = min(w, h)
+        else:
+            d = max(w, h)
+        im_array = im_array[y:y + d, x:x + d]
+        return im_array
 
     @classmethod
-    def resize(cls, image: Image, size: int = 32, resample=Image.LANCZOS) -> Image:
+    def resize(cls, im_array: np.array, size: int = 32, resample=cv.INTER_LINEAR) -> np.array:
         """
-        Resizes an image to size size.
+        Resizes an im_array to size size.
             Args:
-                image: The image to be resised
-                size: The size in px to wich the image shoul be resized
-                resample: the image resampling algorithm
+                im_array: The im_array to be resised
+                size: The size in px to wich the im_array shoul be resized
+                resample: the im_array resampling algorithm
             Return:
-                Returns the resized image
+                Returns the resized im_array
         """
-        image = image.resize((size, size), resample=resample)
-        return image
+        im_array = cv.resize(im_array, (size, size),
+                             interpolation=cv.INTER_LINEAR)  # Todo: different interpolations give same reults
+        return im_array
 
     @classmethod
     def minmax_scale(cls, im_array: np.array, per_channel: bool = False) -> np.array:
@@ -331,9 +336,9 @@ class MyImageTools:
                 Returns the min-max-scaled numpy array of the image
         """
         # Todo: Per channel better ???
-        im_array.setflags(write=1)  # Todo: array seems read-only. Why?
+        # im_array.setflags(write=1)  # Todo: array seems read-only. Why?
         n_chanels = im_array.shape[-1]
-
+        print(n_chanels)
         if per_channel:
             new_array = np.zeros(im_array.shape)
             for i in range(n_chanels):  # RGB
@@ -342,10 +347,10 @@ class MyImageTools:
                 new_array[..., i] = (im_array[..., i] - m) / (M - m)
         else:
             new_array = (im_array - im_array.min()) / (im_array.max() - im_array.min())
-        return new_array
+        return new_array * 255
 
     @classmethod
-    def standardize(cls, im_array: np.array, mean: List, std: List) -> Image:
+    def standardize(cls, im_array: np.array, mean: List, std: List) -> np.array:
         # Todo: Test if this works correctly
         """
         See: https://github.com/tensorpack/tensorpack/issues/789
@@ -389,8 +394,10 @@ class MyImageTools:
         # def get_mean_and_std(dataset): https://github.com/QuantScientist/Deep-Learning-Boot-Camp/blob/master/Kaggle-PyTorch/PyTorch-Ensembler/utils.py
         #
         pass
+
+
 if __name__ == '__main__':
-    x = 'yyy'
+    xsdfsdf = 'yyy'
     # # x = MyOsTools.get_dir_filesnames(Path('../data/0_original/train'), 'jpeg')
     # # x = MyOsTools.create_directory(path=Path('../data/0_original/'), name='test2')
     # MyLogTools.log('xxx')
