@@ -10,15 +10,12 @@ import os
 import time
 
 from datetime import datetime
-from pathlib import Path
-from typing import Tuple, List, Dict, Union
-# from PIL import Image, ImageFilter
+from typing import Tuple, List, Dict
 import numpy as np
 import cv2 as cv
 
 
 class MyLogTools:
-    # Todo: implement other log levels and media
     """
     Collection of function to display or write logs to file of database
     Level:
@@ -70,38 +67,7 @@ class MyOsTools:
     """
 
     @classmethod
-    def delete_directory(cls):
-        pass
-
-    @classmethod
-    def rename_directory(cls):
-        pass
-
-    @classmethod
-    def delete_files(cls):
-        pass
-
-    @classmethod
-    def rename_files(cls, path: Path, old_names: List, new_names: List, workers: int = 1) -> Tuple[bool, str]:
-        """
-        Renames all the files in the old_names list to names in the new_names list.
-
-        Args:
-            path: Path to directory where the files to be renamed are located
-            new_names: List of new names. Order is important!
-            old_names: List of old names. Order is important!
-            workers: Number of multiprocess cores
-
-        Return:
-            Returns a tuple (succ, msg)
-        """
-        succ = False
-        msg = ''
-        return succ, msg
-
-    # --------------------------------------------------------------------------------------------------------
-    @classmethod
-    def check_files_exist(cls, fnames: List, path: Path) -> Dict:
+    def check_files_exist(cls, fnames: List, path: str) -> Dict:
         """
         Checks if all the files from the list fnames exists in directory path
             Args:
@@ -112,7 +78,6 @@ class MyOsTools:
                  Returns a dict {success, message, fmissing, fexcess}
         """
         succ = True
-        msg = ''
 
         filenames = MyOsTools.get_filenames(path)
         fmissing = list(set(fnames) - set(filenames))
@@ -125,11 +90,9 @@ class MyOsTools:
         else:
             succ = succ and False
             msg = 'ERROR: These {} \t files are missing in directory {}: {}{}'.format(len(fmissing), path,
-                                                                                      fmissing[:30],
-                                                                                      '...' if len(
-                                                                                          fmissing) > 30 else '')
+                                                                                      fmissing[:30], '...' if len(
+                    fmissing) > 30 else '')
             MyLogTools.log(msg)
-        # Todo: code handeling of excess files, now only missing files
         return {'success': succ, 'message': msg, 'fmissing': fmissing, 'fexcess': fexcess}
 
     @classmethod
@@ -187,7 +150,7 @@ class MyOsTools:
         return {'success': succ, 'messages': msgs, 'errors': errors}
 
     @classmethod
-    def get_filenames(cls, path: Path, ext: str = '') -> List:
+    def get_filenames(cls, path: str, ext: str = '') -> List:
         """
         Reads the filenames all the filenames in directory located in path or if ext is supplied,
         reads only thr filenames with that extension.
@@ -239,6 +202,32 @@ class MyOsTools:
             msgs.append(msg)
         return {'success': succ, 'message': msgs}
 
+    # ----------------------------------------------------------------------------------------------------------------------
+    @classmethod
+    def ___delete_directory(cls):
+        pass
+
+    @classmethod
+    def ___rename_directory(cls):
+        pass
+
+    @classmethod
+    def ___delete_files(cls):
+        pass
+
+    @classmethod
+    def ___rename_files(cls) -> Tuple[bool, str]:
+        """
+        Renames all the files in the old_names list to names in the new_names list.
+
+        Return:
+            Returns a tuple (succ, msg)
+        """
+        succ = False
+        msg = ''
+        return succ, msg
+    # ----------------------------------------------------------------------------------------------------------------------
+
 
 class MyImageTools:
     """
@@ -246,7 +235,7 @@ class MyImageTools:
 
     Implemented functions are:
         - get_image(cls, im_name: str, path: Path) -> Image:
-        - auto_crop(cls, image: Image, square_min_box: bool = False) -> Image:
+        - autocrop(cls, image: Image, square_min_box: bool = False) -> Image:
         - resize(cls, image: Image, size: int = 32, resample=Image.LANCZOS)->Image:
 
     """
@@ -261,31 +250,38 @@ class MyImageTools:
     """
 
     @classmethod
-    def get_image(cls, fname: str, path: str) -> np.array:
+    def get_image(cls, iname: str, path: str) -> np.array:
         """
         Gets image with name 'im_name' located in 'path' directory
             Args:
                 - im_name: The filename of the image
                 - path: The path where the image exists
             Returns:
-                Returns an Image
+                Returns a np.array
         """
-        im_array = cv.imread(path + fname, 1)
+        im_array = cv.imread(path + iname, 1)
         if im_array is None:
-            MyLogTools.log('ERROR: No image array loaded: {}{}'.format(path, fname))
+            MyLogTools.log('ERROR: No image array loaded: {}{}'.format(path, iname))
             raise FileNotFoundError
-        # MyLogTools.log('DEBUG: Image loaded: {}'.format(fname), level=5)
+        # MyLogTools.log('DEBUG: Image loaded: {}'.format(iname), level=5)
         return im_array
 
     @classmethod
-    def save_image(cls, im_array: np.array, path: str, fname: str) -> None:
-        cv.imwrite(path + fname, im_array)
+    def save_image(cls, im_array: np.array, path: str, iname: str) -> None:
+        succ = cv.imwrite(path + iname, im_array)
+        if not succ:  # image could not be written
+            MyLogTools.log('ERROR: No image array saved: {}{}'.format(path, iname))
+            time.sleep(2)
 
     @classmethod
-    def auto_crop(cls, im_array: np.array, square_min_box: bool = False) -> np.array:
+    def symlink_image(cls, path_src: str, path_dst: str, iname: str):
+        os.symlink(path_src + iname, path_dst + iname)
+
+    @classmethod
+    def autocrop(cls, im_array: np.array, square_min_box: bool = False) -> np.array:
         """
         Automatically crops an image and make it quare.
-        Doing auto_crop before resizing avoids change in aspect ratio for rectangle images
+        Doing autocrop before resizing avoids change in aspect ratio for rectangle images
             Args:
                 im_array: The image to be cropped
                 square_min_box: If True, the image will be croped with the min(width, hight) of the getbbox crop-box.
@@ -311,22 +307,21 @@ class MyImageTools:
         return im_array
 
     @classmethod
-    def resize(cls, im_array: np.array, size: int = 32, resample=cv.INTER_LINEAR) -> np.array:
+    def resize(cls, im_array: np.array, size: int = 32, interpolation=cv.INTER_AREA) -> np.array:
         """
         Resizes an im_array to size size.
             Args:
                 im_array: The im_array to be resised
                 size: The size in px to wich the im_array shoul be resized
-                resample: the im_array resampling algorithm
+                interpolation: the im_array resampling algorithm. For comparisson see: http://tanbakuchi.com/posts/comparison-of-openv-interpolation-algorithms/
             Return:
                 Returns the resized im_array
         """
-        im_array = cv.resize(im_array, (size, size),
-                             interpolation=cv.INTER_LINEAR)  # Todo: different interpolations give same reults
+        im_array = cv.resize(im_array, (size, size), interpolation=interpolation)
         return im_array
 
     @classmethod
-    def minmax_scale(cls, im_array: np.array, per_channel: bool = False) -> np.array:
+    def minmax(cls, im_array: np.array, per_channel: bool = False) -> np.array:
         """
         Scales a numpy image array per channel to [0, 1] and returns that array.
             Args:
@@ -335,8 +330,6 @@ class MyImageTools:
             Return:
                 Returns the min-max-scaled numpy array of the image
         """
-        # Todo: Per channel better ???
-        # im_array.setflags(write=1)  # Todo: array seems read-only. Why?
         n_chanels = im_array.shape[-1]
         print(n_chanels)
         if per_channel:
@@ -347,22 +340,21 @@ class MyImageTools:
                 new_array[..., i] = (im_array[..., i] - m) / (M - m)
         else:
             new_array = (im_array - im_array.min()) / (im_array.max() - im_array.min())
-        return new_array * 255
+        return new_array
 
     @classmethod
-    def standardize(cls, im_array: np.array, mean: List, std: List) -> np.array:
-        # Todo: Test if this works correctly
+    def stdize(cls, im_array: np.array, mean: List, std: List) -> np.array:
         """
         See: https://github.com/tensorpack/tensorpack/issues/789
         Makes the features have 0-mean and unit (1) variance (or std). If the im_array is in BGR (OpenCV) iso RGB then the
         mean en std lists should also have that same order! If they are RGB means or std, swap color channels with
         mean[::-1] and std[::-1]
         Models are specific on the mean and std of the imput they are trained on! If you use a 3th party pretrained model,
-        standardize the new im_array with the same mean and std as the pictures used to train the model on.
+        stdize the new im_array with the same mean and std as the pictures used to train the model on.
         Ex: Image Net used to train Resnet has mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
 
             Args:
-                - im_array: the im_array to standardize. The im_array should be scaled to [0, 1]
+                - im_array: the im_array to stdize. The im_array should be scaled to [0, 1]
                 - mean: The mean  is a ist with value's for each color channel.
                 - str: The standard deviation is a List with vaue's for each color schannel.
             Return:
@@ -375,15 +367,13 @@ class MyImageTools:
         return new_array
 
     @classmethod
-    def ___calc_channel_mean_std(cls):
-        # see: https://stackoverflow.com/questions/47850280/fastest-way-to-compute-image-dataset-channel-wise-mean-and-standard-deviation-in
-        # https://stats.stackexchange.com/questions/374410/how-to-calculate-the-image-datasets-mean-and-std-for-deep-learning
-        #
+    def gray(cls, im_array: np.array) -> np.array:
+        return cv.cvtColor(im_array, cv.COLOR_BGR2GRAY)
 
+    @classmethod
+    def ___calc_channel_mean_std(cls):
         """
         Calculates the per channel mean and std for a dataset.
-
-
         :return:
         """
         pass

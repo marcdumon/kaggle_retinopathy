@@ -54,10 +54,10 @@ if __name__ == '__main__':
 
     im_ar = my_it.image_to_array(img)
     print(im_ar.shape)
-    im_ar = my_it.minmax_scale(im_ar, True)
+    im_ar = my_it.minmax(im_ar, True)
     print(im_ar.shape)
-    # im_ar = my_it.standardize(im_ar, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-    im_ar = my_it.standardize(im_ar, mean=[0.1, 0., 0.], std=[1, 1, 1])
+    # im_ar = my_it.stdize(im_ar, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    im_ar = my_it.stdize(im_ar, mean=[0.1, 0., 0.], std=[1, 1, 1])
     print(im_ar.min(), im_ar.max(), 'ooooooooo')
     print('-' * 120)
     print(im_ar[..., 0])

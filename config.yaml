@@ -3,34 +3,44 @@
 # Setup
 do_setup: false         # If True, edit the setup() code for each new dataset
 do_make_config: false   # If True, overwrite the config.yaml file with default one.
-workers: 1              # nr of cores used in multiprocess. Max=16
+workers: 16             # nr of cores used in multiprocess. Max=16
 seed: 42                # Seed for replication
+
+# The mean and std for using pretrained weights
+# Ex: Resnet: mean:[0.485, 0.456, 0.406] and std: [0.229, 0.224, 0.225] 
+mean: [0.485, 0.456, 0.406]
+std: [0.229, 0.224, 0.225]
+
 experiment_name: test
 experiment_nr: 0
 
+
+
 # Image settings
-image_size: 128  # size of the square image
-n_samples: 3  # nr of images per label
+image_size: 2048  # size of the square image
+n_samples: 1000  # nr of images per label
   # balance_type; how to balance the labels.
   # 0: take n_samples. if not enough, continue. Can lead to imbalanced labels
   # 1: take n_samples. if not enough, duplicate images till each label has n_samples images
-  # 2: sample all labels for an number of images equal to the amount of images in the lowest label
+  # 2: sample all labels for an number of images equal to the amount of images in the smallest label
 # 3: take n_samples. if not enough, augment images till each label has n_samples images
-balance_type: 1
+balance_type: 0
 # png is lossless
 save_ext: png   # The extension dictates the compression algorithm 
   # list of image preprocesses
   # autocrop
   # resize
-  # scale01
-# stdardize
+  # minmax
+  # stdize
+# gray
 preprocess:
-    - autocrop
-    - resize
-    - scale01
+#     - autocrop
+#     - resize
+# - gray
+# - minmax
 
 # Paths
-path: ../data/                   # path to dataset for the project. 
-# Usualy it's to a linked directory to the fast ssd drive
-path_src_ds: 0_original/train/   # path to source dataset
-path_dst_ds: experiments/train_  # path to destination
+path: /mnt/Datasets/kaggle_diabetic_retinopathy/                     # path to dataset for the project. 
+path_src_ds: /mnt/Datasets/kaggle_diabetic_retinopathy/0_original/   # path to source dataset
+path_dst_ds: /mnt/Datasets/kaggle_diabetic_retinopathy/experiments/  # path to destination
+
