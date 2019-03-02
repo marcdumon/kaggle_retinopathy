@@ -271,7 +271,7 @@ class MyImageTools:
         succ = cv.imwrite(path + iname, im_array)
         if not succ:  # image could not be written
             MyLogTools.log('ERROR: No image array saved: {}{}'.format(path, iname))
-            time.sleep(2)
+            raise Exception
 
     @classmethod
     def symlink_image(cls, path_src: str, path_dst: str, iname: str):
@@ -298,12 +298,19 @@ class MyImageTools:
         _, bw = cv.threshold(blured, 50, 255, cv.THRESH_BINARY)  # Eye circle is white, rest black
         # Get the bounding rectangle
         x, y, w, h = cv.boundingRect(bw)
+
         # Crop im_array to square matrix
         if square_min_box:
-            d = min(w, h)
+            pass
         else:
-            d = max(w, h)
-        im_array = im_array[y:y + d, x:x + d]
+            aoi = im_array[y:y + h, x:x + w]  # Arrea of Interest
+            height, width, channels = aoi.shape
+            # Create a black image
+            x = height if height > width else width
+            y = height if height > width else width
+            im_array = np.zeros((x, y, channels), np.uint8)
+            im_array[int((y - height) / 2):int(y - (y - height) / 2), int((x - width) / 2):int(x - (x - width) / 2)] = aoi
+
         return im_array
 
     @classmethod

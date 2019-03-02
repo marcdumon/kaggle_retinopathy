@@ -5,18 +5,16 @@
 # --------------------------------------------------------------------------------------------------------
 
 """
-x Fixme: solve memory problems with create_dataset when using big size (2048)
-x Todo: adapt create_dataset to have following structure .../dataset_name/train, .../dataset_name/valid, .../dataset_name/test
-x Todo: extend create_dataset to also have labels.csv model. Best would be links from .../train/img000.jpeg to .../train/label/ing000.jpeg ???
-x Todo: move dataset mean, std to config.yaml
-x Todo: cleanup code
-x Todo: fix multiprocessing problems
+- Debugged autocrob
+- Fixed autocrop/resize preserves aspect ratio
+- Implemented error trapping
 
+Todo: save error files to error directory
 
 Todo: To have random, do: if seed==0, seed=randint() ?
 Todo: implement other log levels and media
 Todo: Test if def setup(): still works after changing Path to str
-Todo: Check if autocrop/resize preserves aspect ratio (ex: image 17426_right.png (label 4)
+
 Todo: check if numpy uses Atlas/Blas (performance)
 
 Todo: implement preprocess test dataset and prepare submissions

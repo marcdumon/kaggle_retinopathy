@@ -34,7 +34,7 @@ save_ext: png   # The extension dictates the compression algorithm
   # stdize
 # gray
 preprocess:
-#     - autocrop
+  - autocrop
 #     - resize
 # - gray
 # - minmax
