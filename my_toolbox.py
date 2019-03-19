@@ -89,9 +89,7 @@ class MyOsTools:
             MyLogTools.log(msg)
         else:
             succ = succ and False
-            msg = 'ERROR: These {} \t files are missing in directory {}: {}{}'.format(len(fmissing), path,
-                                                                                      fmissing[:30], '...' if len(
-                    fmissing) > 30 else '')
+            msg = 'ERROR: These {} \t files are missing in directory {}: {}{}'.format(len(fmissing), path, fmissing[:30], '...' if len(fmissing) > 30 else '')
             MyLogTools.log(msg)
         return {'success': succ, 'message': msg, 'fmissing': fmissing, 'fexcess': fexcess}
 
@@ -153,7 +151,7 @@ class MyOsTools:
     def get_filenames(cls, path: str, ext: str = '') -> List:
         """
         Reads the filenames all the filenames in directory located in path or if ext is supplied,
-        reads only thr filenames with that extension.
+        reads only the filenames with that extension.
 
         Args:
             path: Path to the directory where the files are located
@@ -234,9 +232,14 @@ class MyImageTools:
     Collection of functions to amnipulate images
 
     Implemented functions are:
-        - get_image(cls, im_name: str, path: Path) -> Image:
-        - autocrop(cls, image: Image, square_min_box: bool = False) -> Image:
-        - resize(cls, image: Image, size: int = 32, resample=Image.LANCZOS)->Image:
+        - def get_image(cls, iname: str, path: str) -> np.array:
+        - def save_image(cls, im_array: np.array, path: str, iname: str) -> None:
+        - def symlink_image(cls, path_src: str, path_dst: str, iname: str):
+        - autocrop(cls, im_array: np.array, square_min_box: bool = False) -> np.array:
+        - resize(cls, im_array: np.array, size: int = 32, interpolation=cv.INTER_AREA) -> np.array:
+        - minmax(cls, im_array: np.array, per_channel: bool = False) -> np.array:
+        - stdize(cls, im_array: np.array, mean: List, std: List) -> np.array:
+        - gray(cls, im_array: np.array) -> np.array:
 
     """
     """ 
@@ -376,6 +379,13 @@ class MyImageTools:
     @classmethod
     def gray(cls, im_array: np.array) -> np.array:
         return cv.cvtColor(im_array, cv.COLOR_BGR2GRAY)
+
+    @classmethod
+    def sift(cls, im_array: np.array, nfeatures=0, nOctaveLayers: int = 81, edgeThreshold: int = 100, sigma: float = 1.6) -> np.array:
+        sift = cv.xfeatures2d.SIFT_create(nfeatures=0, nOctaveLayers=81, edgeThreshold=100, sigma=1.6)
+        keypoints, descriptors = sift.detectAndCompute(im_array, None)
+        im_array = cv.drawKeypoints(im_array, keypoints, None)
+        return im_array
 
     @classmethod
     def ___calc_channel_mean_std(cls):

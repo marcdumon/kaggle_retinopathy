@@ -1,6 +1,6 @@
 # --------------------------------------------------------------------------------------------------------
 # 2019/02/27
-# retinopathy - image_processing_tests.py
+# retinopathy - test_image_processing.py
 # md
 # --------------------------------------------------------------------------------------------------------
 import math
@@ -15,7 +15,7 @@ from pandas import DataFrame, read_csv, concat
 from sacred import Experiment
 from sacred.observers import MongoObserver
 from multiprocessing import Pool
-# from build_data import create_dataset
+# from build_data import create_train_dataset
 from my_toolbox import MyOsTools as my_ot
 from my_toolbox import MyLogTools as my_lt
 from my_toolbox import MyImageTools as my_it
