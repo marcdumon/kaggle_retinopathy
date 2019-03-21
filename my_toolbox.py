@@ -7,12 +7,17 @@
 # Todo:
 #  - Make a package of all my personal "helper" scripts to import in different projects
 import os
+import random
 import time
 
 from datetime import datetime
-from typing import Tuple, List, Dict
+from typing import Tuple, List, Dict, Collection, Optional
 import numpy as np
 import cv2 as cv
+import sklearn as skl
+from sklearn.decomposition import RandomizedPCA, PCA
+
+from settings import CONFIG
 
 
 class MyLogTools:
@@ -51,6 +56,259 @@ class MyLogTools:
             if medium == 1:
                 now = datetime.now()
                 print('{}\t{}'.format(now, msg))
+
+
+class MyImageTools:
+    """
+    Collection of functions to amnipulate images
+
+    Implemented functions are:
+        - def get_image(cls, iname: str, path: str) -> np.array:
+        - def save_image(cls, im_array: np.array, path: str, iname: str) -> None:
+        - def symlink_image(cls, path_src: str, path_dst: str, iname: str):
+        - autocrop(cls, im_array: np.array, square_min_box: bool = False) -> np.array:
+        - resize(cls, im_array: np.array, size: int = 32, interpolation=cv.INTER_AREA) -> np.array:
+        - minmax(cls, im_array: np.array, per_channel: bool = False) -> np.array:
+        - stdize(cls, im_array: np.array, mean: List, std: List) -> np.array:
+        - gray(cls, im_array: np.array) -> np.array:
+
+    """
+    """ 
+    Todo
+    All pre-trained models expect input images normalized in the same way, i.e. mini-batches of 3-channel RGB images 
+    of shape (3 x H x W), where H and W are expected to be at least 224. 
+    The images have to be loaded in to a range of [0, 1] and then 
+    normalized using mean = [0.485, 0.456, 0.406] and std = [0.229, 0.224, 0.225]. 
+    You can use the following transform to normalize:
+    normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    """
+
+    @classmethod
+    def get_image(cls, iname: str, path: str) -> np.array:
+        """
+        Gets image with name 'im_name' located in 'path' directory
+            Args:
+                - im_name: The filename of the image
+                - path: The path where the image exists
+            Returns:
+                Returns a np.array
+        """
+        im_array = cv.imread(path + iname, 1)
+        if im_array is None:
+            MyLogTools.log('ERROR: No image array loaded: {}{}'.format(path, iname))
+            raise FileNotFoundError
+        # MyLogTools.log('DEBUG: Image loaded: {}'.format(iname), level=5)
+        return im_array
+
+    @classmethod
+    def save_image(cls, im_array: np.array, path: str, iname: str) -> None:
+        succ = cv.imwrite(path + iname, im_array)
+        if not succ:  # image could not be written
+            MyLogTools.log('ERROR: No image array saved: {}{}'.format(path, iname))
+            raise Exception
+
+    @classmethod
+    def symlink_image(cls, path_src: str, path_dst: str, iname: str):
+        os.symlink(path_src + iname, path_dst + iname)
+
+    @classmethod
+    def autocrop(cls, im_array: np.array, square_min_box: bool = False) -> np.array:
+        """
+        Automatically crops an image and make it quare.
+        Doing autocrop before resizing avoids change in aspect ratio for rectangle images
+            Args:
+                im_array: The image to be cropped
+                square_min_box: If True, the image will be croped with the min(width, hight) of the getbbox crop-box.
+                                A part of the image be lost.
+                                If False it wil take the max(with, height)
+            Returns:
+                Returnes the croped square image
+        """
+        # blured = im_array.filter(ImageFilter.BoxBlur(20))
+        blured = cv.blur(im_array, (5, 5))
+        # Convert to grayscale
+        blured = cv.cvtColor(blured, cv.COLOR_BGR2GRAY)
+        # Convert to B&W
+        _, bw = cv.threshold(blured, 50, 255, cv.THRESH_BINARY)  # Eye circle is white, rest black
+        # Get the bounding rectangle
+        x, y, w, h = cv.boundingRect(bw)
+
+        # Crop im_array to square matrix
+        if square_min_box:
+            pass
+        else:
+            aoi = im_array[y:y + h, x:x + w]  # Arrea of Interest
+            height, width, channels = aoi.shape
+            # Create a black image
+            x = height if height > width else width
+            y = height if height > width else width
+            im_array = np.zeros((x, y, channels), np.uint8)
+            im_array[int((y - height) / 2):int(y - (y - height) / 2), int((x - width) / 2):int(x - (x - width) / 2)] = aoi
+
+        return im_array
+
+    @classmethod
+    def resize(cls, im_array: np.array, size: int = 32, interpolation=cv.INTER_AREA) -> np.array:
+        """
+        Resizes an im_array to size size.
+            Args:
+                im_array: The im_array to be resised
+                size: The size in px to wich the im_array shoul be resized
+                interpolation: the im_array resampling algorithm. For comparisson see: http://tanbakuchi.com/posts/comparison-of-openv-interpolation-algorithms/
+            Return:
+                Returns the resized im_array
+        """
+        im_array = cv.resize(im_array, (size, size), interpolation=interpolation)
+        return im_array
+
+    @classmethod
+    def augment(cls, im_array: np.ndarray, aug_type: Optional[str] = None, rnd: bool = True) -> dict:
+        """
+        Augment the im_array by rotation or flipping. Currently the rotation angle and the flipping axis are random
+            Args:
+                im_array: The im_array to augment
+                aug_type: The type of augmentation. Can be 'rotation', 'flip'
+                rnd: If True, then a random augmentation will be selected
+            Return:
+                 Returns the augmented image
+        """
+
+        aug_name = ''
+        if rnd:
+            aug_type = random.choice(
+                ['flip', 'rotate', 'rotate', 'rotate', 'rotate', 'rotate', 'rotate', 'rotate', 'rotate', 'rotate', 'rotate', 'rotate', 'rotate', 'rotate', 'rotate', 'rotate', 'rotate', 'rotate',
+
+                 'rotate'])  # many more rotate becasue otherwise the chance to have duplicates with flips are big for small datasets
+
+        if aug_type == 'flip':
+            axis = random.choice(['horizontal', 'vertical', 'both'])
+            im_array = cls.flip(im_array=im_array, axis=axis)
+            aug_name = 'flip' + '_' + axis
+        if aug_type == 'rotate':
+            angle = random.randint(0, 360)
+            im_array = cls.rotate(im_array=im_array, angle=angle)
+            aug_name = 'rotate' + '_' + str(angle)
+
+        return {'aug_name': aug_name, 'im_array': im_array}
+
+    @classmethod
+    def flip(cls, im_array: np.array, axis) -> np.ndarray:
+        if axis == 'horizontal': im_array = cv.flip(im_array, 0)
+        if axis == 'vertical': im_array = cv.flip(im_array, 1)
+        if axis == 'both': im_array = cv.flip(im_array, -1)
+        return im_array
+
+    @classmethod
+    def rotate(cls, im_array: np.array, angle: int = 0) -> np.ndarray:
+        rows, cols = im_array.shape[:2]
+
+        M = cv.getRotationMatrix2D(center=(cols / 2, rows / 2), angle=angle, scale=1)
+        im_array = cv.warpAffine(im_array, M, (cols, rows))
+        return im_array
+
+    @classmethod
+    def histogram_eqalization(cls, im_array: np.array) -> np.ndarray:
+
+        clahe = cv.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        # split img in bgr
+        b, g, r = cv.split(im_array)
+
+        b = clahe.apply(b)
+        g = clahe.apply(g)
+        r = clahe.apply(r)
+
+        im_array = cv.merge((b, g, r))
+
+        return im_array
+
+    @classmethod
+    def random_pca(cls, im_array: np.array, n_components: int = 64, reverse=False) -> np.ndarray:
+        # See https://shankarmsy.github.io/posts/pca-sklearn.html
+        pca = PCA(n_components=n_components, whiten=False, svd_solver='randomized')
+        # pca needs 2 dim
+        height, width, channels = im_array.shape
+
+        im_array = np.reshape(im_array, (height, width * channels))
+        im_array = pca.fit_transform(im_array)
+
+        if reverse:
+            im_array = pca.inverse_transform(im_array)
+            im_array = np.reshape(im_array, (height, width, channels))
+            im_array = im_array.astype(np.uint8)
+
+        return im_array
+
+    @classmethod
+    def minmax(cls, im_array: np.array, per_channel: bool = False) -> np.array:
+        """
+        Scales a numpy image array per channel to [0, 1] and returns that array.
+            Args:
+                - im_array: numpy array to be min-max scaled per channel
+                - per_channel: if True, then the min and max will be calculated per channel. Otherwise min and max will be calculated for the entire image
+            Return:
+                Returns the min-max-scaled numpy array of the image
+        """
+        n_chanels = im_array.shape[-1]
+        print(n_chanels)
+        if per_channel:
+            new_array = np.zeros(im_array.shape)
+            for i in range(n_chanels):  # RGB
+                m, M = im_array[..., i].min(), im_array[..., i].max()
+                print(i, m, M)
+                new_array[..., i] = (im_array[..., i] - m) / (M - m)
+        else:
+            new_array = (im_array - im_array.min()) / (im_array.max() - im_array.min())
+        return new_array
+
+    @classmethod
+    def stdize(cls, im_array: np.array, mean: List, std: List) -> np.array:
+        """
+        See: https://github.com/tensorpack/tensorpack/issues/789
+        Makes the features have 0-mean and unit (1) variance (or std). If the im_array is in BGR (OpenCV) iso RGB then the
+        mean en std lists should also have that same order! If they are RGB means or std, swap color channels with
+        mean[::-1] and std[::-1]
+        Models are specific on the mean and std of the imput they are trained on! If you use a 3th party pretrained model,
+        stdize the new im_array with the same mean and std as the pictures used to train the model on.
+        Ex: Image Net used to train Resnet has mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
+
+            Args:
+                - im_array: the im_array to stdize. The im_array should be scaled to [0, 1]
+                - mean: The mean  is a ist with value's for each color channel.
+                - str: The standard deviation is a List with vaue's for each color schannel.
+            Return:
+                 Returns the standardized im_array
+        """
+        n_chanels = im_array.shape[-1]
+        new_array = np.zeros(im_array.shape)
+        for i in range(n_chanels):  # RGB
+            new_array[..., i] = (im_array[..., i] - mean[i]) / std[i]
+        return new_array
+
+    @classmethod
+    def gray(cls, im_array: np.array) -> np.array:
+        return cv.cvtColor(im_array, cv.COLOR_BGR2GRAY)
+
+    @classmethod
+    def sift(cls, im_array: np.array, nfeatures=0, nOctaveLayers: int = 81, edgeThreshold: int = 100, sigma: float = 1.6) -> np.array:
+        sift = cv.xfeatures2d.SIFT_create(nfeatures=0, nOctaveLayers=81, edgeThreshold=100, sigma=1.6)
+        keypoints, descriptors = sift.detectAndCompute(im_array, None)
+        im_array = cv.drawKeypoints(im_array, keypoints, None)
+        return im_array
+
+    @classmethod
+    def ___calc_channel_mean_std(cls):
+        """
+        Calculates the per channel mean and std for a dataset.
+        :return:
+        """
+        pass
+
+    @classmethod
+    def ___calc_mean_std_dataset(cls):
+        # Multiprocess iterate over images
+        # def get_mean_and_std(dataset): https://github.com/QuantScientist/Deep-Learning-Boot-Camp/blob/master/Kaggle-PyTorch/PyTorch-Ensembler/utils.py
+        #
+        pass
 
 
 class MyOsTools:
@@ -225,182 +483,6 @@ class MyOsTools:
         msg = ''
         return succ, msg
     # ----------------------------------------------------------------------------------------------------------------------
-
-
-class MyImageTools:
-    """
-    Collection of functions to amnipulate images
-
-    Implemented functions are:
-        - def get_image(cls, iname: str, path: str) -> np.array:
-        - def save_image(cls, im_array: np.array, path: str, iname: str) -> None:
-        - def symlink_image(cls, path_src: str, path_dst: str, iname: str):
-        - autocrop(cls, im_array: np.array, square_min_box: bool = False) -> np.array:
-        - resize(cls, im_array: np.array, size: int = 32, interpolation=cv.INTER_AREA) -> np.array:
-        - minmax(cls, im_array: np.array, per_channel: bool = False) -> np.array:
-        - stdize(cls, im_array: np.array, mean: List, std: List) -> np.array:
-        - gray(cls, im_array: np.array) -> np.array:
-
-    """
-    """ 
-    Todo
-    All pre-trained models expect input images normalized in the same way, i.e. mini-batches of 3-channel RGB images 
-    of shape (3 x H x W), where H and W are expected to be at least 224. 
-    The images have to be loaded in to a range of [0, 1] and then 
-    normalized using mean = [0.485, 0.456, 0.406] and std = [0.229, 0.224, 0.225]. 
-    You can use the following transform to normalize:
-    normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-    """
-
-    @classmethod
-    def get_image(cls, iname: str, path: str) -> np.array:
-        """
-        Gets image with name 'im_name' located in 'path' directory
-            Args:
-                - im_name: The filename of the image
-                - path: The path where the image exists
-            Returns:
-                Returns a np.array
-        """
-        im_array = cv.imread(path + iname, 1)
-        if im_array is None:
-            MyLogTools.log('ERROR: No image array loaded: {}{}'.format(path, iname))
-            raise FileNotFoundError
-        # MyLogTools.log('DEBUG: Image loaded: {}'.format(iname), level=5)
-        return im_array
-
-    @classmethod
-    def save_image(cls, im_array: np.array, path: str, iname: str) -> None:
-        succ = cv.imwrite(path + iname, im_array)
-        if not succ:  # image could not be written
-            MyLogTools.log('ERROR: No image array saved: {}{}'.format(path, iname))
-            raise Exception
-
-    @classmethod
-    def symlink_image(cls, path_src: str, path_dst: str, iname: str):
-        os.symlink(path_src + iname, path_dst + iname)
-
-    @classmethod
-    def autocrop(cls, im_array: np.array, square_min_box: bool = False) -> np.array:
-        """
-        Automatically crops an image and make it quare.
-        Doing autocrop before resizing avoids change in aspect ratio for rectangle images
-            Args:
-                im_array: The image to be cropped
-                square_min_box: If True, the image will be croped with the min(width, hight) of the getbbox crop-box.
-                                A part of the image be lost.
-                                If False it wil take the max(with, height)
-            Returns:
-                Returnes the croped square image
-        """
-        # blured = im_array.filter(ImageFilter.BoxBlur(20))
-        blured = cv.blur(im_array, (5, 5))
-        # Convert to grayscale
-        blured = cv.cvtColor(blured, cv.COLOR_BGR2GRAY)
-        # Convert to B&W
-        _, bw = cv.threshold(blured, 50, 255, cv.THRESH_BINARY)  # Eye circle is white, rest black
-        # Get the bounding rectangle
-        x, y, w, h = cv.boundingRect(bw)
-
-        # Crop im_array to square matrix
-        if square_min_box:
-            pass
-        else:
-            aoi = im_array[y:y + h, x:x + w]  # Arrea of Interest
-            height, width, channels = aoi.shape
-            # Create a black image
-            x = height if height > width else width
-            y = height if height > width else width
-            im_array = np.zeros((x, y, channels), np.uint8)
-            im_array[int((y - height) / 2):int(y - (y - height) / 2), int((x - width) / 2):int(x - (x - width) / 2)] = aoi
-
-        return im_array
-
-    @classmethod
-    def resize(cls, im_array: np.array, size: int = 32, interpolation=cv.INTER_AREA) -> np.array:
-        """
-        Resizes an im_array to size size.
-            Args:
-                im_array: The im_array to be resised
-                size: The size in px to wich the im_array shoul be resized
-                interpolation: the im_array resampling algorithm. For comparisson see: http://tanbakuchi.com/posts/comparison-of-openv-interpolation-algorithms/
-            Return:
-                Returns the resized im_array
-        """
-        im_array = cv.resize(im_array, (size, size), interpolation=interpolation)
-        return im_array
-
-    @classmethod
-    def minmax(cls, im_array: np.array, per_channel: bool = False) -> np.array:
-        """
-        Scales a numpy image array per channel to [0, 1] and returns that array.
-            Args:
-                - im_array: numpy array to be min-max scaled per channel
-                - per_channel: if True, then the min and max will be calculated per channel. Otherwise min and max will be calculated for the entire image
-            Return:
-                Returns the min-max-scaled numpy array of the image
-        """
-        n_chanels = im_array.shape[-1]
-        print(n_chanels)
-        if per_channel:
-            new_array = np.zeros(im_array.shape)
-            for i in range(n_chanels):  # RGB
-                m, M = im_array[..., i].min(), im_array[..., i].max()
-                print(i, m, M)
-                new_array[..., i] = (im_array[..., i] - m) / (M - m)
-        else:
-            new_array = (im_array - im_array.min()) / (im_array.max() - im_array.min())
-        return new_array
-
-    @classmethod
-    def stdize(cls, im_array: np.array, mean: List, std: List) -> np.array:
-        """
-        See: https://github.com/tensorpack/tensorpack/issues/789
-        Makes the features have 0-mean and unit (1) variance (or std). If the im_array is in BGR (OpenCV) iso RGB then the
-        mean en std lists should also have that same order! If they are RGB means or std, swap color channels with
-        mean[::-1] and std[::-1]
-        Models are specific on the mean and std of the imput they are trained on! If you use a 3th party pretrained model,
-        stdize the new im_array with the same mean and std as the pictures used to train the model on.
-        Ex: Image Net used to train Resnet has mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
-
-            Args:
-                - im_array: the im_array to stdize. The im_array should be scaled to [0, 1]
-                - mean: The mean  is a ist with value's for each color channel.
-                - str: The standard deviation is a List with vaue's for each color schannel.
-            Return:
-                 Returns the standardized im_array
-        """
-        n_chanels = im_array.shape[-1]
-        new_array = np.zeros(im_array.shape)
-        for i in range(n_chanels):  # RGB
-            new_array[..., i] = (im_array[..., i] - mean[i]) / std[i]
-        return new_array
-
-    @classmethod
-    def gray(cls, im_array: np.array) -> np.array:
-        return cv.cvtColor(im_array, cv.COLOR_BGR2GRAY)
-
-    @classmethod
-    def sift(cls, im_array: np.array, nfeatures=0, nOctaveLayers: int = 81, edgeThreshold: int = 100, sigma: float = 1.6) -> np.array:
-        sift = cv.xfeatures2d.SIFT_create(nfeatures=0, nOctaveLayers=81, edgeThreshold=100, sigma=1.6)
-        keypoints, descriptors = sift.detectAndCompute(im_array, None)
-        im_array = cv.drawKeypoints(im_array, keypoints, None)
-        return im_array
-
-    @classmethod
-    def ___calc_channel_mean_std(cls):
-        """
-        Calculates the per channel mean and std for a dataset.
-        :return:
-        """
-        pass
-
-    @classmethod
-    def ___calc_mean_std_dataset(cls):
-        # Multiprocess iterate over images
-        # def get_mean_and_std(dataset): https://github.com/QuantScientist/Deep-Learning-Boot-Camp/blob/master/Kaggle-PyTorch/PyTorch-Ensembler/utils.py
-        #
-        pass
 
 
 if __name__ == '__main__':

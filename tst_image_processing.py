@@ -1,6 +1,6 @@
 # --------------------------------------------------------------------------------------------------------
 # 2019/02/27
-# retinopathy - test_image_processing.py
+# retinopathy - tst_image_processing.py
 # md
 # --------------------------------------------------------------------------------------------------------
 
@@ -9,7 +9,7 @@ from pathlib import Path
 from pprint import pprint
 from typing import Union, List
 
-from PIL import Image
+import cv2 as cv
 from numpy.random import RandomState
 from pandas import DataFrame, read_csv, concat
 from sacred import Experiment
@@ -36,41 +36,17 @@ def create_image(type: str = 'rgb', size: int = 128):
 
 
 if __name__ == '__main__':
+    path = '/mnt/Datasets/kaggle_diabetic_retinopathy/0_original/train/0/'
+    fname = '13_left.jpeg'
+    # path = '/home/md/Temp/'
+    # fname = 'ada.jpg'
+    img = my_it.get_image(fname, path)
+    cv.imwrite('x.jpg', img)
 
-    create_new_image = 1
+    # img=my_it.resize(img,512)
+    img = my_it.random_pca(img, 64)
 
-    # path = Path('/mnt/Datasets/kaggle_diabetic_retinopathy/0_original/train/0/')
-    # fname = '13_left.jpeg'
-    path = Path('/home/md/Temp/')
-    fname = 'ada.jpg'
-
-    img = None
-    if create_new_image:
-        img = create_image()['image']
-
-    get_dataset_image = 1 - create_new_image
-    if get_dataset_image:
-        img = my_it.get_image(fname, path)
-
-    im_ar = my_it.image_to_array(img)
-    print(im_ar.shape)
-    im_ar = my_it.minmax(im_ar, True)
-    print(im_ar.shape)
-    # im_ar = my_it.stdize(im_ar, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-    im_ar = my_it.stdize(im_ar, mean=[0.1, 0., 0.], std=[1, 1, 1])
-    print(im_ar.min(), im_ar.max(), 'ooooooooo')
-    print('-' * 120)
-    print(im_ar[..., 0])
-    print('-' * 120)
-    print(im_ar[..., 1])
-    print('-' * 120)
-    print(im_ar[..., 2])
-    print('-' * 120)
-
-    im_ar = im_ar * 255
-    im_ar = im_ar.astype(np.uint8)  # Loose information
-    img2 = Image.fromarray(im_ar)
-
-    img.show('ORIGINAL')
-    img2.show('PROCESSED')
-    print(im_ar.max(), '------------')
+    cv.imshow('image', img)
+    cv.waitKey(0)
+    cv.destroyAllWindows()
+    cv.imwrite('y.jpg', img)

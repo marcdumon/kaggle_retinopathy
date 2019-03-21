@@ -5,13 +5,18 @@
 # --------------------------------------------------------------------------------------------------------
 
 """
-x Todo: implement same image preprocessing for test dataset asd for train/val
-x Todo: implement SIFT feature extraction
+x Todo: implement data augmentation flip and rotate
+x Todo: implement histogram equalization
+x Todo: implement PCA
 
 
+
+!!! Todo: check out profesional code from http://albumentations.readthedocs.io how to make my software more professional
 Todo: test if create_train_dataset still works
-Todo: merge create_train_dataset and create_test_dataset
+Todo: merge create_train_dataset and create_test_dataset if possible
 
+Todo: improve the random.seed in different modules. Doesn't seem to work in multiprocess. I get different angle each time in rotation
+Todo: change all type hints from np.array to np.ndarray
 Todo: To have random, do: if seed==0, seed=randint() ?
 Todo: implement other log levels and media
 Todo: Test if def setup(): still works after changing Path to str
@@ -37,25 +42,21 @@ Todo: better error trapping like:
 
 """
 import multiprocessing
+import random
 import time
 import traceback
-from typing import Union
+from typing import Union, Optional
 
 from pandas import DataFrame, read_csv, concat
 from ruamel_yaml import YAML  # as yaml
 
+from settings import *
 from my_toolbox import MyImageTools as my_it
 from my_toolbox import MyLogTools as my_lt
 from my_toolbox import MyOsTools as my_ot
 
-# ----------------------------------------------------------------------------------------------------------------------
-yaml = YAML(typ='safe')
-with open('config.yaml') as fl:
-    config = yaml.load(fl)
-print(config)
 
 
-# ----------------------------------------------------------------------------------------------------------------------
 def setup():
     """
     Changes for each different dataset.
@@ -74,7 +75,7 @@ def setup():
             - minimum columns: fname, ext, label
             - optional feature columns: f_xxx
     """
-    path_dset = config['path_src_ds']
+    path_dset = CONFIG['path_src_ds']
     fpath_lbl = path_dset + 'trainLabels.csv'
     labels_df = read_csv(fpath_lbl)
     labels_df['ext'] = 'jpeg'
@@ -111,30 +112,30 @@ class DatasetEngine:
     """
     error_images = []
 
-    _preprocess = config['preprocess']
+    _preprocess = CONFIG['preprocess']
     if _preprocess is None: _preprocess = []
 
-    if 'resize' not in _preprocess: config['image_size'] = 999999  # no resizing of pictures
-    _dataset_name = '{}px_{}i_{}bt_{}/'.format(config['image_size'], config['n_samples'], config['balance_type'], config['preprocess'])
+    if 'resize' not in _preprocess: CONFIG['image_size'] = 999999  # no resizing of pictures
+    _dataset_name = '{}px_{}i_{}bt_{}/'.format(CONFIG['image_size'], CONFIG['n_samples'], CONFIG['balance_type'], CONFIG['preprocess'])
     _dataset_name = _dataset_name.replace('[', '').replace(']', '').replace('\'', '').replace(',', 'X').replace(' ', '')
 
-    _path = config['path']
-    _path_src_ds = config['path_src_ds']
-    _path_dst_ds = config['path_dst_ds'] + _dataset_name
+    _path = CONFIG['path']
+    _path_src_ds = CONFIG['path_src_ds']
+    _path_dst_ds = CONFIG['path_dst_ds'] + _dataset_name
     print('-' * 120)
     print(_path_src_ds, _path_dst_ds, _path)
     print('-' * 120)
 
-    _n_samples = config['n_samples']
-    _balance_type = config['balance_type']
-    _random_state = config['seed']
-    _workers = config['workers']
-    _image_size = config['image_size']
-    _load_ext = config['load_ext']
-    _save_ext = config['save_ext']
+    _n_samples = CONFIG['n_samples']
+    _balance_type = CONFIG['balance_type']
+    _workers = CONFIG['workers']
+    _seed = CONFIG['seed']
+    _image_size = CONFIG['image_size']
+    _load_ext = CONFIG['load_ext']
+    _save_ext = CONFIG['save_ext']
 
-    _mean = config['mean']
-    _std = config['std']
+    _mean = CONFIG['mean']
+    _std = CONFIG['std']
     print(_mean, _std)
     _labels_df = read_csv(_path_src_ds + 'labels.csv', index_col=[0])  # Dataframe [fname, ext, label, f_...]
     _label_count = _labels_df.groupby(['label']).agg('count')['fname']  # Series with [label, count]
@@ -165,14 +166,13 @@ class DatasetEngine:
         errors_df = df[df['fname_load'].isin(res)]
         print('Errors:')
         print(errors_df)
-        df = df.drop(errors_df.index, axis=0)
 
         # save errors
         errors_df.to_csv(path_or_buf=cls._path_dst_ds + 'error_test_images.csv')
 
         # save config to the dataset directory
         with open(cls._path_dst_ds + 'used_test_config.yaml', 'w') as f:
-            yaml.dump(config, f)
+            yaml.dump(CONFIG, f)
 
         print('-' * 120)
         my_lt.log('INFO: Processing images took {} seconds or {} minutes '.format(end - start, int((end - start) / 60)))
@@ -207,6 +207,10 @@ class DatasetEngine:
         # Setup directory structure in _path_dst_ds
         cls._setup_dir_structure()
 
+        # Create labels.csv
+        with open(cls._path_dst_ds + 'labels.csv', 'w') as f:
+            f.write('nr,fname,label,f_patient,f_eye,fname_save,fname_load\n')
+
         # Take a sample from the dataset
         df = cls._take_samples()
 
@@ -216,36 +220,35 @@ class DatasetEngine:
         df = df.drop('ext', axis=1)
 
         print(df.columns)
+        print(df.groupby('label').agg('count').loc[:, 'fname'])
+
 
         # Start preprocessing
-        args = [(f['fname_load'], cls._path_src_ds + 'train/', f['fname_save'], cls._path_dst_ds + 'train/', f['label'], True, i + 1, df.shape[0]) for i, f in df.iterrows()]
+        args = [(f['fname_load'], cls._path_src_ds + 'train/', f['fname_save'], cls._path_dst_ds + 'train/', f['label'], True, i + 1, df.shape[0], f)
+                for i, f in df.iterrows()]  # Todo: we pass f (for writing to labels.csv) and f['...'] => redundant info
         start = time.time()
 
         with multiprocessing.Pool(cls._workers) as pool:
             res = pool.starmap(cls._prepro_image, args)  # All fnames from images with errors in _prepro_image are accumulated in res
         end = time.time()
 
-        # Remove errors from df
+        # save errors
         errors_df = df[df['fname_load'].isin(res)]
         print('Errors:')
         print(errors_df)
-        df = df.drop(errors_df.index, axis=0)
-
-        # save errors
         errors_df.to_csv(path_or_buf=cls._path_dst_ds + 'error_images.csv')
-        # save labels
-        df.to_csv(path_or_buf=cls._path_dst_ds + 'labels.csv')
 
         # save config to the dataset directory
         with open(cls._path_dst_ds + 'used_config.yaml', 'w') as f:
-            yaml.dump(config, f)
+            yaml.dump(CONFIG, f)
 
         print('-' * 120)
         my_lt.log('INFO: Processing images took {} seconds or {} minutes '.format(end - start, int((end - start) / 60)))
         print('-' * 120)
 
     @classmethod
-    def _prepro_image(cls, fname_load: str, path_load: str, fname_save: str, path_save: str, label: Union[int, str], make_flat_links: bool = False, i: int = 0, tot: int = 0) -> Union[None, str]:
+    def _prepro_image(cls, fname_load: str, path_load: str, fname_save: str, path_save: str, label: Union[int, str],
+                      make_flat_links: bool = False, i: int = 0, tot: int = 0, row=None) -> Optional[str]:
         """
         Collection of operations to preprocess an image. It loads an image and executes preprocessing operations
         according to the values of prepro.
@@ -265,9 +268,15 @@ class DatasetEngine:
         # Load image
         im_array = my_it.get_image(iname=fname_load, path=path_load + str(label) + '/')
 
+
         # Start preprocessing
         try:
             for p in cls._preprocess:
+                if p == 'augm':
+                    aug = my_it.augment(im_array=im_array, rnd=True)
+                    im_array = aug['im_array']
+                    fname_ext = fname_save.split(sep='.')
+                    fname_save = fname_ext[0] + '_' + aug['aug_name'] + '.' + fname_ext[1]
                 if p == 'autocrop':
                     im_array = my_it.autocrop(im_array=im_array)
                 if p == 'resize':
@@ -280,6 +289,10 @@ class DatasetEngine:
                     my_it.stdize(im_array, mean=cls._mean, std=cls._std)
                 if p == 'sift':
                     im_array = my_it.sift(im_array)
+                if p == 'hist':
+                    im_array = my_it.histogram_eqalization(im_array)
+                if p == 'pca':
+                    im_array = my_it.random_pca(im_array)
 
             # save image
             my_it.save_image(im_array=im_array, path=path_save + str(label) + '/', iname=fname_save)
@@ -289,6 +302,11 @@ class DatasetEngine:
                 # create symlink from .../train/im00.jpg to .../train/label/im00.jpg
                 my_it.symlink_image(path_src=cls._path_dst_ds + 'train/' + str(label) + '/',
                                     path_dst=cls._path_dst_ds + 'train_flat/', iname=fname_save)
+            # append row to the labels.csv
+            row = str(i) + ',' + row['fname'] + ',' + str(row['label']) + ',' + str(row['f_patient']) + ',' + row['f_eye'] + ',' + fname_save + ',' + row['fname_load'] + '\n'
+            with open(cls._path_dst_ds + 'labels.csv', 'a') as f:
+                f.write(row)
+
             return None  # !!!! Don't return im_array because it will accumulate in multiprocess pool and fill up memeory
 
         except Exception as e:
@@ -317,22 +335,23 @@ class DatasetEngine:
 
             if cls._balance_type == 0:
                 ns = min(cls._n_samples, lc)
-                df_s = df_s.sample(n=ns, replace=False, random_state=cls._random_state)
+                df_s = df_s.sample(n=ns, replace=False, random_state=cls._seed)  # Todo: is this necessary if np.random.seed is set in settings.np
             if cls._balance_type == 1:
-                df_s = df_s.sample(n=cls._n_samples, replace=True, random_state=cls._random_state)
+                df_s = df_s.sample(n=cls._n_samples, replace=True, random_state=cls._seed)
             if cls._balance_type == 2:
                 ns = min(cls._n_samples, min(cls._label_count))
-                df_s = df_s.sample(n=ns, replace=False, random_state=cls._random_state)
+                df_s = df_s.sample(n=ns, replace=False, random_state=cls._seed)
             if cls._balance_type == 3:
-                pass
-            if cls._balance_type == 3:
+                ns = lc
+                df_s = df_s.sample(n=cls._n_samples, replace=True, random_state=cls._seed)
+            if cls._balance_type == 4:
                 pass
             df = concat([df, df_s])
         df = df.reset_index(drop=True)  # Old index now a column
         return df
 
     @classmethod
-    def _setup_dir_structure(cls):
+    def _setup_dir_structure(cls, overwrite: bool = False):
         """
         Setup the directory structure for the new dataset
         Directories will have the resnet structure:
@@ -352,7 +371,7 @@ class DatasetEngine:
         if res['success']:  # _path_dst_ds exists
             # check if _path_dst_ds is empty
             res = my_ot.get_filenames(path=cls._path_dst_ds)
-            if res:  # _path_dst_ds is not empty
+            if res and not overwrite:  # _path_dst_ds is not empty
                 my_lt.log('ERROR: Directory not empty: {}'.format(cls._path_dst_ds))
                 raise SystemExit(0)
         else:  # _path_dst_ds doesn't exist
@@ -385,7 +404,7 @@ def make_config_yaml():
     """
 
     # !!!! The intendations in doc must be alligned to the far left otherwise the yaml file looks ugly
-    doc = """   
+    doc = """
 # Configuration File
 
 experiment_name: test
@@ -398,8 +417,8 @@ workers: 16             # nr of cores used in multiprocess. Max=16
 seed: 42                # Seed for replication
 
 # The mean and std for using pretrained weights
-# Ex: Resnet: mean:[0.485, 0.456, 0.406] and std: [0.229, 0.224, 0.225] 
-mean: [0.485, 0.456, 0.406]   
+# Ex: Resnet: mean:[0.485, 0.456, 0.406] and std: [0.229, 0.224, 0.225]
+mean: [0.485, 0.456, 0.406]
 std: [0.229, 0.224, 0.225]
 
 # Image settings
@@ -414,24 +433,30 @@ balance_type: 1
 
 load_ext: 'jpeg'
 # png is lossless
-save_ext: 'png'         # The extension dictates the compression algorithm 
+save_ext: 'png'         # The extension dictates the compression algorithm
 
 # list of image preprocesses
+    # augm # augement dataset. Must be first
+    # hist
     # autocrop
     # resize
     # minmax            # scales array to [0, 1]
     # stdize            # centers a minmax array around 0 with unit variance
     # gray
     # sift
-preprocess:     
+    # pca
+preprocess:
+    # - augm
+    # - hist
     # - autocrop
     # - resize
     # - gray
     # - minmax
     # - sift
+    # - pca
 
 # Paths
-path: /mnt/Datasets/kaggle_diabetic_retinopathy/                     # path to dataset for the project. 
+path: /mnt/Datasets/kaggle_diabetic_retinopathy/                     # path to dataset for the project.
 path_src_ds: /mnt/Datasets/kaggle_diabetic_retinopathy/0_original/   # path to source dataset
 path_dst_ds: /mnt/Datasets/kaggle_diabetic_retinopathy/experiments/  # path to destination
 
@@ -445,8 +470,8 @@ path_dst_ds: /mnt/Datasets/kaggle_diabetic_retinopathy/experiments/  # path to d
 
 # ----------------------------------------------------------------------------------------------------------------------
 def experiment():
-    if config['do_setup']: setup()
-    if config['do_make_config']: make_config_yaml()
+    if CONFIG['do_setup']: setup()
+    if CONFIG['do_make_config']: make_config_yaml()
     DatasetEngine.create_train_dataset()
     # DatasetEngine.create_test_dataset()
 

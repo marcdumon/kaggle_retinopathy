@@ -17,29 +17,33 @@ experiment_nr: 0
 
 
 # Image settings
-image_size: 512 # size of the square image
-n_samples: 6000  # nr of images per label
+image_size: 256 # size of the square image
+n_samples: 5000  # nr of images per label
   # balance_type; how to balance the labels.
   # 0: take n_samples. if not enough, continue. Can lead to imbalanced labels
   # 1: take n_samples. if not enough, duplicate images till each label has n_samples images
   # 2: sample all labels for an number of images equal to the amount of images in the smallest label
 # 3: take n_samples. if not enough, augment images till each label has n_samples images
-balance_type: 0
+balance_type: 3
 
 load_ext: jpeg
 # png is lossless
 save_ext: png   # The extension dictates the compression algorithm 
   # list of image preprocesses
+  # augm # augement dataset. Must be first
   # autocrop
   # resize
   # minmax
   # stdize
   # gray
 # sift
+
 preprocess:
+  - augm
+  - hist
   - autocrop
   - resize
-  - sift
+#  - sift
 #  - gray
 # - minmax
 
