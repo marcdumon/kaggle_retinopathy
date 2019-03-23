@@ -4,6 +4,8 @@
 # md
 # --------------------------------------------------------------------------------------------------------
 import random
+from pprint import pprint
+
 import numpy as np
 from ruamel_yaml import YAML
 
@@ -11,7 +13,7 @@ from ruamel_yaml import YAML
 yaml = YAML(typ='safe')
 with open('config.yaml') as fl:
     CONFIG = yaml.load(fl)
-
+pprint(CONFIG)
 # set random seeds
 random.seed(CONFIG['seed'])
 np.random.seed(CONFIG['seed'])

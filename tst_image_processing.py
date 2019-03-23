@@ -10,6 +10,7 @@ from pprint import pprint
 from typing import Union, List
 
 import cv2 as cv
+import torch
 from numpy.random import RandomState
 from pandas import DataFrame, read_csv, concat
 from sacred import Experiment
@@ -36,17 +37,19 @@ def create_image(type: str = 'rgb', size: int = 128):
 
 
 if __name__ == '__main__':
-    path = '/mnt/Datasets/kaggle_diabetic_retinopathy/0_original/train/0/'
-    fname = '13_left.jpeg'
+    path = '/mnt/Datasets/kaggle_diabetic_retinopathy/0_original/train/4/'
+    fname = '7531_right.jpeg'
     # path = '/home/md/Temp/'
-    # fname = 'ada.jpg'
+    # fname = 'xxx.png'
     img = my_it.get_image(fname, path)
-    cv.imwrite('x.jpg', img)
 
     # img=my_it.resize(img,512)
-    img = my_it.random_pca(img, 64)
+    img1 = my_it.autocrop(img, True)
+    img1 = my_it.resize(img1, 512)
+    cv.imshow('image1', img1)
 
-    cv.imshow('image', img)
+    img2 = my_it.autocrop(img, False)
+    img2 = my_it.resize(img2, 512)
+    cv.imshow('image2', img2)
     cv.waitKey(0)
     cv.destroyAllWindows()
-    cv.imwrite('y.jpg', img)

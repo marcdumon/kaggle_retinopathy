@@ -5,13 +5,15 @@
 # --------------------------------------------------------------------------------------------------------
 
 """
-x Todo: implement data augmentation flip and rotate
-x Todo: implement histogram equalization
-x Todo: implement PCA
-
-
+x Todo: implement autocrop with square inside eye-circle
+x Todo: bugfix create_test_dataset
 
 !!! Todo: check out profesional code from http://albumentations.readthedocs.io how to make my software more professional
+
+Todo: Better crop: inside the eye-ball iso outside. The assumption is that the relevant info lays inside and the data on the border of the eye can be discarted
+
+
+
 Todo: test if create_train_dataset still works
 Todo: merge create_train_dataset and create_test_dataset if possible
 
@@ -54,7 +56,6 @@ from settings import *
 from my_toolbox import MyImageTools as my_it
 from my_toolbox import MyLogTools as my_lt
 from my_toolbox import MyOsTools as my_ot
-
 
 
 def setup():
@@ -150,24 +151,32 @@ class DatasetEngine:
         """
         # Create df for test dataset
         df = DataFrame(my_ot.get_filenames(cls._path_src_ds + 'test/', ext=cls._load_ext), columns=['fname_load'])
-        df[['fname_save', 'ext']] = df['fname_load'].str.split('.', expand=True)  # +cls._save_ext
-        df['fname_save'] = df['fname_save'] + '.' + cls._save_ext
+        df[['fname', 'ext']] = df['fname_load'].str.split('.', expand=True)  # +cls._save_ext
+
+        df['fname_save'] = df['fname'] + '.' + cls._save_ext
+        df['label'] = [-1] * df.shape[0]
+        print(df.columns)
         df = df.drop('ext', axis=1)
 
+        # # Start preprocessing
+        # args = [(row['fname_load'], cls._path_src_ds + 'test/', row['fname_save'], cls._path_dst_ds + 'test/', '', False, i + 1, df.shape[0])
+        #       for i, row in df.iterrows()]
+        # # args = [(row['fname_load'], i + 1, df.shape[0]) for i, row in df.iterrows()]
+        # start = time.time()
+
         # Start preprocessing
-        args = [(f['fname_load'], cls._path_src_ds + 'test/', f['fname_save'], cls._path_dst_ds + 'test/', '', False, i + 1, df.shape[0]) for i, f in df.iterrows()]
-        # args = [(f['fname_load'], i + 1, df.shape[0]) for i, f in df.iterrows()]
+        args = [(row['fname_load'], cls._path_src_ds + 'test/', row['fname_save'], cls._path_dst_ds + 'test/', '', False, i + 1, df.shape[0], row)
+                for i, row in df.iterrows()]  # Todo: we pass row (for writing to labels.csv) and row['...'] => redundant info
         start = time.time()
+
         with multiprocessing.Pool(cls._workers) as pool:
             res = pool.starmap(cls._prepro_image, args)  # All fnames from images with errors in _prepro_image are accumulated in res
         end = time.time()
 
-        # Remove errors from df
+        # save errors
         errors_df = df[df['fname_load'].isin(res)]
         print('Errors:')
         print(errors_df)
-
-        # save errors
         errors_df.to_csv(path_or_buf=cls._path_dst_ds + 'error_test_images.csv')
 
         # save config to the dataset directory
@@ -178,14 +187,10 @@ class DatasetEngine:
         my_lt.log('INFO: Processing images took {} seconds or {} minutes '.format(end - start, int((end - start) / 60)))
         print('-' * 120)
 
-        print('-' * 120)
-        my_lt.log('INFO: Processing images took {} seconds or {} minutes '.format(end - start, int((end - start) / 60)))
-        print('-' * 120)
-
     @classmethod
     def create_train_dataset(cls):
         """
-        Collection of operations to create a new dataset
+        Collection of operations to create the test dataset
         Return:
         """
         # Sanity checks
@@ -222,10 +227,9 @@ class DatasetEngine:
         print(df.columns)
         print(df.groupby('label').agg('count').loc[:, 'fname'])
 
-
         # Start preprocessing
-        args = [(f['fname_load'], cls._path_src_ds + 'train/', f['fname_save'], cls._path_dst_ds + 'train/', f['label'], True, i + 1, df.shape[0], f)
-                for i, f in df.iterrows()]  # Todo: we pass f (for writing to labels.csv) and f['...'] => redundant info
+        args = [(row['fname_load'], cls._path_src_ds + 'train/', row['fname_save'], cls._path_dst_ds + 'train/', row['label'], True, i + 1, df.shape[0], row)
+                for i, row in df.iterrows()]  # Todo: we pass row (for writing to labels.csv) and row['...'] => redundant info
         start = time.time()
 
         with multiprocessing.Pool(cls._workers) as pool:
@@ -267,8 +271,6 @@ class DatasetEngine:
 
         # Load image
         im_array = my_it.get_image(iname=fname_load, path=path_load + str(label) + '/')
-
-
         # Start preprocessing
         try:
             for p in cls._preprocess:
@@ -278,7 +280,9 @@ class DatasetEngine:
                     fname_ext = fname_save.split(sep='.')
                     fname_save = fname_ext[0] + '_' + aug['aug_name'] + '.' + fname_ext[1]
                 if p == 'autocrop':
-                    im_array = my_it.autocrop(im_array=im_array)
+                    im_array = my_it.autocrop(im_array=im_array, inside=False)
+                if p == 'autocrop_in':
+                    im_array = my_it.autocrop(im_array=im_array, inside=True, expand=1.0)
                 if p == 'resize':
                     im_array = my_it.resize(im_array=im_array, size=cls._image_size)
                 if p == 'gray':
@@ -302,12 +306,14 @@ class DatasetEngine:
                 # create symlink from .../train/im00.jpg to .../train/label/im00.jpg
                 my_it.symlink_image(path_src=cls._path_dst_ds + 'train/' + str(label) + '/',
                                     path_dst=cls._path_dst_ds + 'train_flat/', iname=fname_save)
-            # append row to the labels.csv
-            row = str(i) + ',' + row['fname'] + ',' + str(row['label']) + ',' + str(row['f_patient']) + ',' + row['f_eye'] + ',' + fname_save + ',' + row['fname_load'] + '\n'
-            with open(cls._path_dst_ds + 'labels.csv', 'a') as f:
-                f.write(row)
 
-            return None  # !!!! Don't return im_array because it will accumulate in multiprocess pool and fill up memeory
+            if path_save.split('/')[-1]:  # if train
+                # append row to the labels.csv
+                row = str(i) + ',' + row['fname'] + ',' + str(row['label']) + ',' + str(row['f_patient']) + ',' + row['f_eye'] + ',' + fname_save + ',' + row['fname_load'] + '\n'
+                with open(cls._path_dst_ds + 'labels.csv', 'a') as f:
+                    f.write(row)
+                    pass
+                return None  # !!!! Don't return im_array because it will accumulate in multiprocess pool and fill up memeory
 
         except Exception as e:
             print('-' * 120)
@@ -439,6 +445,7 @@ save_ext: 'png'         # The extension dictates the compression algorithm
     # augm # augement dataset. Must be first
     # hist
     # autocrop
+    # autocrop_in       # autocrop but with square inside the eye-circle to reduce size
     # resize
     # minmax            # scales array to [0, 1]
     # stdize            # centers a minmax array around 0 with unit variance
@@ -472,8 +479,8 @@ path_dst_ds: /mnt/Datasets/kaggle_diabetic_retinopathy/experiments/  # path to d
 def experiment():
     if CONFIG['do_setup']: setup()
     if CONFIG['do_make_config']: make_config_yaml()
-    DatasetEngine.create_train_dataset()
-    # DatasetEngine.create_test_dataset()
+    # DatasetEngine.create_train_dataset()
+    DatasetEngine.create_test_dataset()
 
 
 # ----------------------------------------------------------------------------------------------------------------------
