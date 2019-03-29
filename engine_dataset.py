@@ -5,8 +5,7 @@
 # --------------------------------------------------------------------------------------------------------
 
 """
-x Todo: implement autocrop with square inside eye-circle
-x Todo: bugfix create_test_dataset
+x Todo: bugfix create__dataset
 
 !!! Todo: check out profesional code from http://albumentations.readthedocs.io how to make my software more professional
 
@@ -307,7 +306,7 @@ class DatasetEngine:
                 my_it.symlink_image(path_src=cls._path_dst_ds + 'train/' + str(label) + '/',
                                     path_dst=cls._path_dst_ds + 'train_flat/', iname=fname_save)
 
-            if path_save.split('/')[-1]:  # if train
+            if path_save.split('/')[-2] == 'train':  # if train
                 # append row to the labels.csv
                 row = str(i) + ',' + row['fname'] + ',' + str(row['label']) + ',' + str(row['f_patient']) + ',' + row['f_eye'] + ',' + fname_save + ',' + row['fname_load'] + '\n'
                 with open(cls._path_dst_ds + 'labels.csv', 'a') as f:
@@ -479,8 +478,8 @@ path_dst_ds: /mnt/Datasets/kaggle_diabetic_retinopathy/experiments/  # path to d
 def experiment():
     if CONFIG['do_setup']: setup()
     if CONFIG['do_make_config']: make_config_yaml()
-    # DatasetEngine.create_train_dataset()
-    DatasetEngine.create_test_dataset()
+    DatasetEngine.create_train_dataset()
+    # DatasetEngine.create_test_dataset()
 
 
 # ----------------------------------------------------------------------------------------------------------------------
