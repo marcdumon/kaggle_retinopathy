@@ -411,6 +411,19 @@ class MyOsTools:
         return {'success': succ, 'messages': msgs, 'errors': errors}
 
     @classmethod
+    def get_directories(cls, path: str) -> List:
+        """
+        Reads the sub-directories located in path.
+        Args:
+            path: Path to the directory where the sub-directories are located
+
+        Returns:
+            Returns a alphabetically sorted list of sub-directories located in path
+        """
+        dir_lst = next(os.walk(path))[1]
+        return dir_lst
+
+    @classmethod
     def get_filenames(cls, path: str, ext: str = '') -> List:
         """
         Reads the filenames all the filenames in directory located in path or if ext is supplied,

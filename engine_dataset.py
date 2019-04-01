@@ -5,7 +5,7 @@
 # --------------------------------------------------------------------------------------------------------
 
 """
-x Todo: bugfix create__dataset
+
 
 !!! Todo: check out profesional code from http://albumentations.readthedocs.io how to make my software more professional
 
